@@ -168,6 +168,7 @@ def _replay_worker(serial: str, filepath: str, filename: str,
                 "duration_ms": duration_ms,
             })
 
+        last_ws_time = 0
         for loop in range(loop_times):
             with _lock:
                 if key not in _running_macros:
@@ -239,12 +240,15 @@ def _replay_worker(serial: str, filepath: str, filename: str,
                                 _running_macros[key]["completed_ops"] = completed
 
                         if ws_callback:
-                            ws_callback("macro_progress", {
-                                "serial": serial,
-                                "filename": filename,
-                                "completed": completed,
-                                "total": touch_count,
-                            })
+                            now = time.time()
+                            if completed == touch_count or (now - last_ws_time) >= 1.0:
+                                ws_callback("macro_progress", {
+                                    "serial": serial,
+                                    "filename": filename,
+                                    "completed": completed,
+                                    "total": touch_count,
+                                })
+                                last_ws_time = now
 
         # Done
         elapsed = time.time() - _running_macros.get(key, {}).get(

@@ -7,6 +7,10 @@ const API = {
 
     async get(path) {
         const res = await fetch(`${this.BASE}${path}`);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.detail || `HTTP Error ${res.status}: ${res.statusText}`);
+        }
         return res.json();
     },
 
@@ -16,6 +20,10 @@ const API = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || err.detail || `HTTP Error ${res.status}: ${res.statusText}`);
+        }
         return res.json();
     },
 

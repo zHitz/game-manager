@@ -293,6 +293,9 @@ const TaskRunnerPage = {
             `;
         }
 
+        if (this._runningMacros.has(filename)) {
+            clearInterval(this._runningMacros.get(filename));
+        }
         const timerInterval = setInterval(() => {
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
             const m = Math.floor(elapsed / 60);
@@ -300,6 +303,7 @@ const TaskRunnerPage = {
             const elEl = document.getElementById(`${cardKey}-elapsed`);
             if (elEl) elEl.textContent = m > 0 ? `${m}m ${s}s` : `${s}s`;
         }, 1000);
+        this._runningMacros.set(filename, timerInterval);
 
         // Execute on all selected emulators
         let successCount = 0;
@@ -314,7 +318,7 @@ const TaskRunnerPage = {
                     this.addFeed('fail', `✗ Failed #${idx}: ${result.error}`);
                 }
             } catch (e) {
-                this.addFeed('fail', `✗ Network error on #${idx}`);
+                this.addFeed('fail', `✗ Network error on #${idx}: ${e.message}`);
             }
         }
 
@@ -332,6 +336,7 @@ const TaskRunnerPage = {
             if (totalDuration > 0) {
                 setTimeout(() => {
                     clearInterval(timerInterval);
+                    this._runningMacros.delete(filename);
                     if (statusEl) {
                         statusEl.innerHTML = `
                             <div class="macro-done-bar">
@@ -350,6 +355,7 @@ const TaskRunnerPage = {
                 // No duration info — reset after 3s
                 setTimeout(() => {
                     clearInterval(timerInterval);
+                    this._runningMacros.delete(filename);
                     if (statusEl) statusEl.innerHTML = '';
                     if (btn) {
                         btn.disabled = false;
@@ -359,6 +365,7 @@ const TaskRunnerPage = {
             }
         } else {
             clearInterval(timerInterval);
+            this._runningMacros.delete(filename);
             if (statusEl) statusEl.innerHTML = `<div class="macro-done-bar" style="color:var(--red-500)"><span>All executions failed</span></div>`;
             if (btn) {
                 btn.disabled = false;
@@ -458,8 +465,23 @@ const TaskRunnerPage = {
     },
 
     updateFromWS(event, data) {
-        const dotMap = { task_started: 'active', task_progress: 'active', task_completed: 'done', task_failed: 'fail' };
-        this.addFeed(dotMap[event] || 'active', `[${data.serial || '?'}] ${data.step || data.status || event}`);
+        const dotMap = {
+            task_started: 'active', task_progress: 'active', task_completed: 'done', task_failed: 'fail',
+            macro_started: 'active', macro_progress: 'active', macro_completed: 'done', macro_failed: 'fail'
+        };
+
+        let msg = `[${data.serial || '?'}] `;
+        if (event.startsWith('macro_')) {
+            msg += `Macro "${data.filename}": `;
+            if (event === 'macro_started') msg += 'Started';
+            else if (event === 'macro_progress') msg += `Progress ${data.completed}/${data.total}`;
+            else if (event === 'macro_completed') msg += `Completed in ${data.elapsed_ms}ms`;
+            else if (event === 'macro_failed') msg += `Failed: ${data.error}`;
+        } else {
+            msg += (data.step || data.status || event);
+        }
+
+        this.addFeed(dotMap[event] || 'active', msg);
     },
 
     // ── Lifecycle ──
