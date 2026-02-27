@@ -281,8 +281,8 @@ body {
     border-radius: var(--radius-full);
     background: hsla(210, 40%, 96%, 0.5);
     border: none;
-    padding-left: 40px;
-    padding-right: 16px;
+    padding-left: 40px !important;
+    padding-right: 16px !important;
     font-size: 14px;
     font-family: var(--font-sans);
     color: var(--foreground);

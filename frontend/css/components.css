@@ -389,6 +389,35 @@
     flex-shrink: 0;
 }
 
+/* ── Hover Actions ── */
+.hover-actions-container .device-hover-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-fast);
+}
+
+.hover-actions-container:hover .device-hover-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ── UX Animations ── */
+@keyframes fadeInSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.page-enter {
+    animation: fadeInSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* ── Data Card (for dashboard right side) ── */
 .data-card {
     background: var(--card);
@@ -1061,4 +1090,346 @@
 .actions-tab:not(.active) .tab-count {
     background: var(--secondary);
     color: var(--muted-foreground);
+}
+
+/* ════════════════════════════════════════════
+   CHROME-STYLE TABS
+════════════════════════════════════════════ */
+.chrome-tabbar-wrap {
+    position: relative;
+    margin-top: 14px;
+    margin-bottom: 0;
+}
+
+/* The background track — looks like the bottom edge of Chrome's tab strip */
+.chrome-tabbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    padding: 0 0 0 0;
+    position: relative;
+    border-bottom: 1.5px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.chrome-tabbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Individual tab */
+.chrome-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 10px 0 13px;
+    min-width: 100px;
+    max-width: 200px;
+    background: var(--secondary);
+    border: 1.5px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    transition: background .15s, color .15s;
+    flex-shrink: 0;
+    margin-right: -1px;
+    z-index: 1;
+}
+
+.chrome-tab:hover:not(.active-tab) {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+
+/* Active tab sits above the border */
+.chrome-tab.active-tab {
+    background: var(--background);
+    color: var(--foreground);
+    border-color: var(--border);
+    border-bottom-color: var(--background);
+    /* merges with content area */
+    z-index: 3;
+    margin-bottom: -1.5px;
+    height: 36px;
+}
+
+/* The left/right curved "notches" mimicking Chrome's shape */
+.chrome-tab::before,
+.chrome-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: 8px;
+    height: 8px;
+    pointer-events: none;
+}
+
+.chrome-tab::before {
+    left: -8px;
+    border-bottom-right-radius: 8px;
+    box-shadow: 3px 0 0 0 var(--secondary);
+    background: transparent;
+}
+
+.chrome-tab.active-tab::before {
+    box-shadow: 3px 0 0 0 var(--background);
+}
+
+.chrome-tab::after {
+    right: -8px;
+    border-bottom-left-radius: 8px;
+    box-shadow: -3px 0 0 0 var(--secondary);
+    background: transparent;
+}
+
+.chrome-tab.active-tab::after {
+    box-shadow: -3px 0 0 0 var(--background);
+}
+
+.tab-favicon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--muted);
+    transition: background .15s;
+}
+
+.chrome-tab.active-tab .tab-favicon {
+    background: var(--primary);
+}
+
+.tab-count-pill {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 99px;
+    background: hsla(0, 0%, 50%, 0.1);
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+    min-width: 18px;
+    text-align: center;
+}
+
+.chrome-tab.active-tab .tab-count-pill {
+    background: hsla(210, 100%, 50%, 0.1);
+    color: var(--primary);
+}
+
+.tab-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-close {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+    padding: 0;
+    transition: background .15s, color .15s;
+    opacity: 0;
+}
+
+.chrome-tab:hover .tab-close,
+.chrome-tab.active-tab .tab-close {
+    opacity: 1;
+}
+
+.tab-close:hover {
+    background: hsla(0, 0%, 50%, 0.2);
+    color: var(--foreground);
+}
+
+/* "All" tab (can't be closed) */
+.chrome-tab.tab-all .tab-close {
+    display: none;
+}
+
+/* New tab button */
+.new-tab-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 4px 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 50%;
+    color: var(--muted-foreground);
+    transition: background .15s, color .15s;
+    flex-shrink: 0;
+}
+
+.new-tab-btn:hover {
+    background: var(--secondary);
+    color: var(--foreground);
+}
+
+/* Tab rename inline */
+.tab-label-input {
+    width: 80px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    padding: 0;
+}
+
+/* content area matches the active tab */
+.tab-content-area {
+    background: var(--background);
+    border: 1.5px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    padding: 0 0 8px;
+}
+
+/* Tab color accents */
+.tab-color-0 {
+    --tc: #4f9eff;
+}
+
+.tab-color-1 {
+    --tc: #22c55e;
+}
+
+.tab-color-2 {
+    --tc: #f59e0b;
+}
+
+.tab-color-3 {
+    --tc: #a78bfa;
+}
+
+.tab-color-4 {
+    --tc: #f472b6;
+}
+
+.tab-color-5 {
+    --tc: #34d399;
+}
+
+.chrome-tab.active-tab .tab-favicon {
+    background: var(--tc, var(--primary));
+}
+
+.chrome-tab.active-tab .tab-count-pill {
+    background: rgba(var(--tc-rgb, 79, 158, 255), .18);
+    color: var(--tc, var(--primary));
+}
+
+/* ─ DROPDOWN MENU (···) ──────────────────────── */
+.dropdown-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 4px;
+    min-width: 180px;
+    animation: fadeUp .1s ease;
+}
+
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(4px)
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0)
+    }
+}
+
+.dd-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    color: var(--foreground);
+    transition: background .1s;
+    font-family: var(--font-sans);
+}
+
+.dd-item:hover {
+    background: var(--accent);
+}
+
+.dd-item.danger {
+    color: var(--destructive);
+}
+
+.dd-item.disabled {
+    color: var(--muted-foreground);
+    cursor: default;
+    pointer-events: none;
+}
+
+.dd-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+}
+
+.dd-icon {
+    width: 14px;
+    text-align: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    opacity: .8;
+}
+
+.dd-sub-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    padding: 6px 10px 3px;
+    font-family: var(--font-mono);
+}
+
+.dd-item.tab-option {
+    padding-left: 14px;
+    font-size: 11.5px;
+}
+
+.dd-item.tab-option .tab-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }

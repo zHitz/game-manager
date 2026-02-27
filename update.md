@@ -1,6 +1,43 @@
 # COD Game Automation Manager - Update Log
 
-## Version 1.0.3 (Current)
+## Version 1.0.4 (Current)
+*Emulator Workspace Organization, Menus & UX Polish*
+
+- **Chrome-Style Tabs (`frontend/js/pages/emulators.js`)**
+  - **Tab Management System:** Đã tích hợp hệ thống tab đa cửa sổ mang phong cách trình duyệt Chrome cho giao diện quản lý Emulator Instances. Người dùng có thể nhóm máy ảo (Phân lô Farming, Scanners, v.v.) vào các tab riêng biệt.
+  - **Dynamic Badge Count:** Hiển thị tự động số lượng máy ảo hiển thị (count pill badge) cho từng tab, phân màu nền nổi bật cho Active Tab.
+  - **Tab Editing (Inline):** Tạo tab mới qua dấu `+`. Có thể nhấp đúp (double-click) vào bất kỳ nhãn tab nào để vào chế độ đổi tên nhanh. Có nút `✕` để xóa Tab tùy chỉnh (các máy ảo bên trong tự động hoàn về Tab "All Instances").
+
+- **Card Context Menu Redesign (`frontend/js/pages/emulators.js`)**
+  - **Modern Dropdown (···):** Loại bỏ nút "Rename" cồng kềnh, chuyển mọi tương tác nâng cao vào Menu thả xuống dạng bóng đổ kích hoạt khi click nút More (···) khi Hover qua card máy.
+  - **Right-Click Context Menu:** Hệ thống Menu ngữ cảnh hoàn toàn mới cho từng giả lập. Hỗ trợ truy cập nhanh thao tác: `Copy Name`, `Copy ADB Serial`, `Copy Index`, `Rename` và `Start/Stop` mà không cần di chuột qua lại.
+  - **Quick Copy Actions:** Hỗ trợ Copy ADB serial hoặc Instance Name vào clipboard, tích hợp bộ thay biểu tượng tick `✓` cực kì nhanh và phản hồi Animation trượt thả trực quan.
+  - **Move To Tab Workflow:** Thêm tuỳ chọn "Move to Tab" liệt kê danh sách toàn bộ tab đang mở. Click để gán máy ảo đang chọn qua Tab khác tiện lợi (sẽ tự làm mờ tên Tab hiện tại).
+  - Tích hợp thêm các nút Context: **Rename**, **Start/Stop Instance** vào cùng menu.
+
+- **Enhanced Interaction (`frontend/js/pages/emulators.js`)**
+  - **Inline Rename:** Cung cấp tính năng Double-Click trực tiếp lên tên Emulator để chỉnh sửa tại chỗ (Inline Focus) thay vì mở modal. Tự động gọi API rename và cập nhật UI.
+  - **Bulk Safety:** Các nút thao tác hàng loạt "Stop All" và "Stop Selected" giờ đã có hộp thoại `confirm()` chống click nhầm gây tắt máy đột ngột.
+  - **ADB Copier:** Thêm link Copy icon tiện lợi bên cạnh ID mạng (VD: `emulator-5554`), nhấn để đưa thẳng serial vào Clipboard.
+  - **Action-centric Control Panel:** Đã thêm thanh công cụ trên cùng chứa Search Bar, Filter Tabs (All, Running, Stopped) và các nút Bulk Actions.
+  - **Batch Operations:** Nâng cấp hệ thống Multi-select thông qua Checkbox ở mỗi hàng, cho phép chọn nhiều Emulator và Start/Stop hàng loạt chỉ với 1 click.
+  - **Pro UX Hover Actions:** Thay vì để sẵn nút Start/Stop chiếm diện tích và mất tập trung, Action Buttons (Start, Stop, Restart) giờ đây ẩn dưới dạng Hover Quick Actions — chỉ xuất hiện khi người dùng rê chuột vào Emulator cụ thể.
+  - **Auto-Refresh Toggle:** Bổ sung tính năng bật/tắt Auto Refresh ngay trên Toolbar giúp dễ dàng theo dõi Dashboard realtime mà không bị làm phiền lúc debug.
+
+- **Visual & Rendering Upgrades (`frontend/js/pages/emulators.js` & `components.css`)**
+  - **Staggered Animations:** Giao diện load danh sách không còn chớp nháy mà trượt lên mượt mà theo từng mục (sử dụng CSS keyframe `fadeInSlideUp` kết hợp `animation-delay` động tính theo index).
+  - **Auto-Refresh Ring:** Cải tiến thanh Toggle `Auto Refresh`. Thay vì chỉ gạt nút nhàm chán, hiển thị thêm một vòng tròn SVG đếm ngược 5 giây (`stroke-dashoffset`) giúp theo dõi được chính xác thời điểm gửi API quét dữ liệu. Thêm nút "Manual Refresh" và text Update Timestamp.
+  - **Robustness:** Bọc `try...catch` bao toàn bộ logic map danh sách `renderList()`. Ngăn chặn hoàn toàn lỗi sập trắng UI khi render thẻ div và đổ log JSON stacktrace ra trực tiếp màn hình nếu xuất hiện cấu trúc data không hợp lệ.
+  - **CSS Priority Fix:** Loại bỏ `opacity: 0` gây sập hiển thị list do class `.page-enter` xung đột với JS load động, và đệm padding chuẩn cho ô Search Box để không bị đè text lên kính lúp.
+  - **Advanced Row Layout:** Cấu trúc lại dữ liệu hiển thị từng instance:
+    - Hiển thị thông số runtime metrics chi tiết trên một dòng: PID, Resolution, DPI, CPU Usage, RAM Usage.
+    - Status Badge với màu sắc chuẩn UI (Xanh lá cho Running, Xanh xám cho Stopped).
+    - **[Hotfix]** Khắc phục lỗi raw string HTML: Loại bỏ các khoảng trắng thừa bị chèn vào thẻ DOM tag (`< div`, `< !--`) trong script JS để render UI thành DOM thật thay vì text tĩnh.
+  - **UI Updates:** Bổ sung classes cho hiệu ứng hover `hover-actions-container` và `device-hover-actions` thân thiện.
+
+---
+
+## Version 1.0.3
 *SPA State Persistence — Deep Root-Cause Fix (Production Safe)*
 
 - **Global State Management (`frontend/js/store.js`)**

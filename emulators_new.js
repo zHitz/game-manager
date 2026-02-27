@@ -16,9 +16,6 @@
  *  - Inline rename via double-click
  *  - Confirm dialog before Stop All / Stop Selected bulk actions
  */
-// ── TAB COLORS ─────────────────────────────────────
-const TAB_COLORS = ['#4f9eff', '#22c55e', '#f59e0b', '#a78bfa', '#f472b6', '#34d399'];
-
 const EmulatorsPage = {
     _pollInterval: null,
     _countdownInterval: null,
@@ -31,14 +28,6 @@ const EmulatorsPage = {
     _refreshSeconds: 5,    // polling interval in seconds
     _contextMenu: null,    // active context menu element
     _renamingIndex: null,  // index currently being renamed
-
-    // Tab State
-    _tabs: [
-        { id: 'all', label: 'All Instances', color: '#4f9eff', indices: null }
-    ],
-    _activeTabId: 'all',
-    _tabCounter: 0,
-    _renamingTabId: null,
 
     // ─────────────────────────────────────────────
     //  RENDER
@@ -201,42 +190,30 @@ const EmulatorsPage = {
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════════
-                 CHROME TABS
-            ══════════════════════════════════════════ -->
-            <div class="chrome-tabbar-wrap">
-                <div class="chrome-tabbar" id="chrome-tabbar">
-                    <!-- tabs rendered by JS -->
-                </div>
+            <!-- Select-all row -->
+            <div style="display:flex; align-items:center; padding:0 16px 8px 16px; gap:12px;">
+                <input type="checkbox" id="select-all-cb" onchange="EmulatorsPage.toggleSelectAll(this.checked)"
+                       style="margin-right:4px; cursor:pointer;" />
+                <label for="select-all-cb" style="font-size:13px; font-weight:500; color:var(--muted-foreground); cursor:pointer;">
+                    Select All
+                </label>
+                <span id="emu-selection-hint" style="font-size:12px; color:var(--muted-foreground); display:none;">
+                    — <strong id="emu-selected-label">0</strong> selected
+                </span>
             </div>
 
-            <!-- Content Area -->
-            <div class="tab-content-area">
-                <!-- Select-all row -->
-                <div style="display:flex; align-items:center; padding:10px 16px 8px 16px; gap:12px;">
-                    <input type="checkbox" id="select-all-cb" onchange="EmulatorsPage.toggleSelectAll(this.checked)"
-                           style="margin-right:4px; cursor:pointer;" />
-                    <label for="select-all-cb" style="font-size:13px; font-weight:500; color:var(--muted-foreground); cursor:pointer;">
-                        Select All
-                    </label>
-                    <span id="emu-selection-hint" style="font-size:12px; color:var(--muted-foreground); display:none;">
-                        — <strong id="emu-selected-label">0</strong> selected
-                    </span>
-                </div>
-
-                <!-- Instance list -->
-                <div class="grid-1" id="emu-list" style="gap:8px; padding: 0 12px 4px;">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                <line x1="8" y1="21" x2="16" y2="21"/>
-                                <line x1="12" y1="17" x2="12" y2="21"/>
-                            </svg>
-                        </div>
-                        <span class="font-medium">Loading instances…</span>
-                        <span class="spinner"></span>
+            <!-- Instance list -->
+            <div class="grid-1" id="emu-list" style="gap:8px;">
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
                     </div>
+                    <span class="font-medium">Loading instances…</span>
+                    <span class="spinner"></span>
                 </div>
             </div>
 
@@ -259,7 +236,6 @@ const EmulatorsPage = {
         // Global click → dismiss context menu
         document.addEventListener('click', this._dismissContextMenu.bind(this), true);
 
-        this.renderTabs();
         await this.refresh();
         this._setupPolling();
         this._startCountdown();
@@ -367,148 +343,6 @@ const EmulatorsPage = {
     },
 
     // ─────────────────────────────────────────────
-    //  TABS
-    // ─────────────────────────────────────────────
-    renderTabs() {
-        const bar = document.getElementById('chrome-tabbar');
-        if (!bar) return;
-        bar.innerHTML = '';
-
-        this._tabs.forEach((tab, i) => {
-            const isActive = tab.id === this._activeTabId;
-            const count = tab.indices === null
-                ? this._instances.length
-                : tab.indices.size;
-
-            const el = document.createElement('div');
-            el.className = `chrome-tab tab-color-${i % TAB_COLORS.length} ${isActive ? 'active-tab' : ''} ${tab.id === 'all' ? 'tab-all' : ''}`;
-            el.style.setProperty('--tc', tab.color);
-            el.dataset.tabId = tab.id;
-
-            // Double-click to rename
-            el.ondblclick = (e) => { e.stopPropagation(); this.startTabRename(tab.id); };
-            el.onclick = (e) => {
-                if (e.target.closest('.tab-close') || e.target.closest('.tab-label-input')) return;
-                this.switchTab(tab.id);
-            };
-
-            // Label (normal or renaming)
-            const labelHtml = (this._renamingTabId === tab.id)
-                ? `<input type="text" class="tab-label-input" id="tab-rename-input"
-                       value="${this._escapeHtml(tab.label)}"
-                       onkeydown="EmulatorsPage.handleTabRenameKey(event,'${tab.id}')"
-                       onblur="EmulatorsPage.commitTabRename('${tab.id}',this.value)"
-                       onclick="event.stopPropagation()" />`
-                : `<span class="tab-label">${this._escapeHtml(tab.label)}</span>`;
-
-            el.innerHTML = `
-                <div class="tab-favicon" style="background:${tab.color};opacity:${isActive ? '1' : '.4'};"></div>
-                ${labelHtml}
-                <span class="tab-count-pill">${count}</span>
-                ${tab.id !== 'all' ? `<button class="tab-close" title="Close tab" onclick="EmulatorsPage.closeTab('${tab.id}',event)">
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
-                  </svg>
-                </button>` : ''}
-            `;
-            bar.appendChild(el);
-
-            // Focus rename input
-            if (this._renamingTabId === tab.id) {
-                requestAnimationFrame(() => {
-                    const inp = document.getElementById('tab-rename-input');
-                    if (inp) { inp.focus(); inp.select(); }
-                });
-            }
-        });
-
-        // New tab button
-        const newBtn = document.createElement('button');
-        newBtn.className = 'new-tab-btn';
-        newBtn.title = 'New tab';
-        newBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
-        newBtn.onclick = () => this.newTab();
-        bar.appendChild(newBtn);
-    },
-
-    switchTab(id) {
-        this._activeTabId = id;
-        this._selectedInstances.clear();
-        this.renderTabs();
-        this.renderList();
-        this.updateSelectionUI();
-    },
-
-    newTab() {
-        this._tabCounter++;
-        const id = `tab-${this._tabCounter}`;
-        const color = TAB_COLORS[(this._tabs.length) % TAB_COLORS.length];
-        this._tabs.push({ id, label: `Tab ${this._tabCounter}`, color, indices: new Set() });
-        this.switchTab(id);
-        // Auto-start rename on new tab
-        this.startTabRename(id);
-    },
-
-    closeTab(id, e) {
-        e.stopPropagation();
-        const idx = this._tabs.findIndex(t => t.id === id);
-        if (idx === -1) return;
-
-        // Remove tab, items conceptually return to "All" since All ignores indices
-        this._tabs.splice(idx, 1);
-        if (this._activeTabId === id) {
-            this._activeTabId = 'all';
-        }
-        this.renderTabs();
-        this.renderList();
-    },
-
-    startTabRename(id) {
-        this._renamingTabId = id;
-        this.renderTabs();
-    },
-
-    handleTabRenameKey(e, id) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            this.commitTabRename(id, e.target.value.trim());
-        } else if (e.key === 'Escape') {
-            this._renamingTabId = null;
-            this.renderTabs();
-        }
-    },
-
-    commitTabRename(id, name) {
-        this._renamingTabId = null;
-        const tab = this._tabs.find(t => t.id === id);
-        if (tab && name) tab.label = name;
-        this.renderTabs();
-    },
-
-    /** Assign an instance to a tab */
-    moveToTab(instIndex, tabId) {
-        // Remove from all other non-all tabs
-        this._tabs.forEach(tab => {
-            if (tab.id !== 'all' && tab.indices) tab.indices.delete(instIndex);
-        });
-        if (tabId !== 'all') {
-            const tab = this._tabs.find(t => t.id === tabId);
-            if (tab && tab.indices) tab.indices.add(instIndex);
-        }
-        this.renderTabs();
-        this.renderList();
-        const tabName = tabId === 'all' ? 'All Instances' : (this._tabs.find(t => t.id === tabId)?.label || tabId);
-        Toast.success('Moved', `Emulator #${instIndex} → "${tabName}"`);
-    },
-
-    getTabForInstance(instIndex) {
-        for (const tab of this._tabs) {
-            if (tab.id !== 'all' && tab.indices && tab.indices.has(instIndex)) return tab.id;
-        }
-        return 'all';
-    },
-
-    // ─────────────────────────────────────────────
     //  FILTER / SEARCH
     // ─────────────────────────────────────────────
     setSearch(query) {
@@ -534,14 +368,8 @@ const EmulatorsPage = {
         this.renderList();
     },
 
-    getActiveTabInstances() {
-        const activeTab = this._tabs.find(t => t.id === this._activeTabId);
-        if (!activeTab || activeTab.indices === null) return this._instances;
-        return this._instances.filter(i => activeTab.indices.has(i.index));
-    },
-
     getFilteredInstances() {
-        return this.getActiveTabInstances().filter(inst => {
+        return this._instances.filter(inst => {
             if (this._searchQuery) {
                 const needle = this._searchQuery;
                 const haystack = `${inst.name} ${inst.index} ${this._adbSerial(inst.index)}`.toLowerCase();
@@ -583,18 +411,18 @@ const EmulatorsPage = {
         const count = this._selectedInstances.size;
 
         const btnStart = document.getElementById('btn-start-selected');
-        const btnStop = document.getElementById('btn-stop-selected');
-        const cStart = document.getElementById('selected-count-start');
-        const cStop = document.getElementById('selected-count-stop');
-        const hint = document.getElementById('emu-selection-hint');
-        const label = document.getElementById('emu-selected-label');
+        const btnStop  = document.getElementById('btn-stop-selected');
+        const cStart   = document.getElementById('selected-count-start');
+        const cStop    = document.getElementById('selected-count-stop');
+        const hint     = document.getElementById('emu-selection-hint');
+        const label    = document.getElementById('emu-selected-label');
 
         if (btnStart) btnStart.disabled = count === 0;
-        if (btnStop) btnStop.disabled = count === 0;
-        if (cStart) cStart.textContent = count;
-        if (cStop) cStop.textContent = count;
-        if (hint) hint.style.display = count > 0 ? 'inline' : 'none';
-        if (label) label.textContent = count;
+        if (btnStop)  btnStop.disabled  = count === 0;
+        if (cStart)   cStart.textContent = count;
+        if (cStop)    cStop.textContent  = count;
+        if (hint)     hint.style.display = count > 0 ? 'inline' : 'none';
+        if (label)    label.textContent  = count;
 
         const selectAllCb = document.getElementById('select-all-cb');
         const filtered = this.getFilteredInstances();
@@ -611,11 +439,10 @@ const EmulatorsPage = {
         const list = document.getElementById('emu-list');
         if (!list) return;
 
-        try {
-            const filtered = this.getFilteredInstances();
+        const filtered = this.getFilteredInstances();
 
-            if (this._instances.length === 0) {
-                list.innerHTML = `
+        if (this._instances.length === 0) {
+            list.innerHTML = `
                 <div class="card" style="border-style:dashed; display:flex; flex-direction:column; align-items:center;
                     justify-content:center; padding:48px; color:var(--muted-foreground);">
                     <svg style="width:48px;height:48px;opacity:.4;margin-bottom:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -626,32 +453,28 @@ const EmulatorsPage = {
                     <h3 style="font-size:16px;font-weight:500;margin-bottom:6px;">No LDPlayer Instances Found</h3>
                     <p class="text-sm">Install LDPlayer or check the <code>ldconsole.exe</code> path in <code>config.yaml</code>.</p>
                 </div>`;
-                return;
-            }
+            return;
+        }
 
-            if (filtered.length === 0) {
-                list.innerHTML = `
+        if (filtered.length === 0) {
+            list.innerHTML = `
                 <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--muted-foreground);">
                     <svg style="width:32px;height:32px;opacity:.4;margin-bottom:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
                     <p style="font-size:14px;">No instances match <em>"${this._escapeHtml(this._searchQuery || this._filter)}"</em>.</p>
                 </div>`;
-                return;
-            }
-
-            list.innerHTML = filtered.map((inst, i) => this._renderCard(inst, i)).join('');
-
-            this.updateSelectionUI();
-        } catch (error) {
-            console.error(error);
-            list.innerHTML = `<div style="color: red; padding: 20px;">UI Render Error: ${error.message}</div>`;
+            return;
         }
+
+        list.innerHTML = filtered.map((inst, i) => this._renderCard(inst, i)).join('');
+
+        this.updateSelectionUI();
     },
 
     _renderCard(inst, animIndex) {
         const isSelected = this._selectedInstances.has(inst.index);
-        const serial = this._adbSerial(inst.index);
+        const serial     = this._adbSerial(inst.index);
         const isRenaming = this._renamingIndex === inst.index;
 
         const statusBadge = inst.running
@@ -761,11 +584,14 @@ const EmulatorsPage = {
                 ${statusBadge}
                 <div class="device-hover-actions" style="display:flex; gap:6px;">
                     ${actionBtns}
-                    <!-- ··· menu button -->
-                    <button class="btn btn-outline btn-icon-sm" title="More actions"
-                            onclick="EmulatorsPage.showContextMenu(event, ${inst.index})" id="emu-btn-more-${inst.index}"
-                            style="font-size:14px; letter-spacing:1px; font-weight:700; color:var(--muted-foreground);">
-                        ···
+                    <!-- Rename button -->
+                    <button class="btn btn-outline btn-icon-sm" title="Rename this instance"
+                            onclick="EmulatorsPage.startRename(${inst.index})"
+                            id="emu-btn-rename-${inst.index}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -859,82 +685,60 @@ const EmulatorsPage = {
     // ─────────────────────────────────────────────
     showContextMenu(event, index) {
         event.preventDefault();
-        event.stopPropagation();
         this._dismissContextMenu();
 
-        const inst = this._instances.find(i => i.index === index);
-        const currentTabId = this.getTabForInstance(index);
-
-        let btnRect;
-        // Check if triggered from the ··· button or right-click
-        if (event.currentTarget && event.currentTarget.tagName === 'BUTTON') {
-            btnRect = event.currentTarget.getBoundingClientRect();
-        } else {
-            btnRect = { right: event.clientX + 180, bottom: event.clientY - 4 }; // fallback for normal right-click on row
-        }
+        const inst   = this._instances.find(i => i.index === index);
+        const serial = this._adbSerial(index);
+        const name   = inst ? inst.name : `#${index}`;
 
         const menu = document.createElement('div');
-        menu.className = 'dropdown-menu';
         menu.id = 'emu-context-menu';
+        menu.style.cssText = `
+            position:fixed; z-index:9999;
+            background:var(--card); border:1px solid var(--border); border-radius:var(--radius-md);
+            box-shadow:var(--shadow-md); padding:4px; min-width:200px;
+            font-size:13px; font-weight:500;
+            animation: fadeIn 80ms ease;
+        `;
 
-        // ── Static items
-        const items = [
-            {
-                icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
-                label: 'Rename',
-                action: () => this.startRename(index),
-            },
-            {
-                icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-                label: 'Copy ADB Serial',
-                action: () => this.copySerial(index),
+        const menuItems = [
+            { label: 'Copy Name',        icon: '📋', action: () => this._copyText(name,   'Name copied') },
+            { label: 'Copy ADB Serial',  icon: '🔗', action: () => this._copyText(serial, 'ADB serial copied') },
+            { label: 'Copy Index',       icon: '#',  action: () => this._copyText(String(index), 'Index copied') },
+            { separator: true },
+            { label: 'Rename Instance',  icon: '✏️', action: () => this.startRename(index) },
+            { separator: true },
+            inst && inst.running
+                ? { label: 'Stop Instance', icon: '⏹', action: () => this.stopInstance(index), danger: true }
+                : { label: 'Start Instance', icon: '▶', action: () => this.startInstance(index) },
+            inst && inst.running
+                ? { label: 'Restart Instance', icon: '🔄', action: () => this.restartInstance(index) }
+                : null,
+        ].filter(Boolean);
+
+        menuItems.forEach(item => {
+            if (item.separator) {
+                const hr = document.createElement('div');
+                hr.style.cssText = 'height:1px; background:var(--border); margin:4px 0;';
+                menu.appendChild(hr);
+                return;
             }
-        ];
-
-        items.forEach(item => {
             const btn = document.createElement('button');
-            btn.className = 'dd-item';
-            btn.innerHTML = `<span class="dd-icon">${item.icon}</span><span>${item.label}</span>`;
-            btn.onclick = () => { item.action(); this._dismissContextMenu(); };
-            menu.appendChild(btn);
-        });
-
-        // ── "Move to Tab" section
-        const sep = document.createElement('div'); sep.className = 'dd-sep'; menu.appendChild(sep);
-        const subLabel = document.createElement('div'); subLabel.className = 'dd-sub-label'; subLabel.textContent = 'Move to Tab'; menu.appendChild(subLabel);
-
-        this._tabs.forEach(tab => {
-            const isCurrent = tab.id === currentTabId;
-            const btn = document.createElement('button');
-            btn.className = `dd-item tab-option${isCurrent ? ' disabled' : ''}`;
-            btn.innerHTML = `
-                <span class="tab-dot" style="background:${tab.color};"></span>
-                <span style="flex:1;">${this._escapeHtml(tab.label)}</span>
-                ${isCurrent ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+            btn.style.cssText = `
+                display:flex; align-items:center; gap:10px; width:100%; padding:7px 10px;
+                background:none; border:none; border-radius:var(--radius-sm); cursor:pointer; text-align:left;
+                color: ${item.danger ? 'var(--destructive)' : 'var(--foreground)'};
             `;
-            if (!isCurrent) btn.onclick = (e) => { e.stopPropagation(); this.moveToTab(index, tab.id); this._dismissContextMenu(); };
+            btn.innerHTML = `<span style="font-size:12px; min-width:14px; text-align:center;">${item.icon}</span><span>${item.label}</span>`;
+            btn.onmouseenter = () => { btn.style.background = 'var(--secondary)'; };
+            btn.onmouseleave = () => { btn.style.background = 'none'; };
+            btn.onclick = (e) => { e.stopPropagation(); item.action(); this._dismissContextMenu(); };
             menu.appendChild(btn);
         });
 
-        // Add start/stop depending on state (at the end for convenience)
-        const sep2 = document.createElement('div'); sep2.className = 'dd-sep'; menu.appendChild(sep2);
-        if (inst && inst.running) {
-            const btn = document.createElement('button');
-            btn.className = 'dd-item danger';
-            btn.innerHTML = `<span class="dd-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span><span>Stop Instance</span>`;
-            btn.onclick = (e) => { e.stopPropagation(); this.stopInstance(index); this._dismissContextMenu(); };
-            menu.appendChild(btn);
-        } else {
-            const btn = document.createElement('button');
-            btn.className = 'dd-item';
-            btn.innerHTML = `<span class="dd-icon" style="color:var(--emerald-600);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></span><span>Start Instance</span>`;
-            btn.onclick = (e) => { e.stopPropagation(); this.startInstance(index); this._dismissContextMenu(); };
-            menu.appendChild(btn);
-        }
-
-        // Position below the ··· button or right-click coords
-        menu.style.left = `${Math.min(btnRect.right - 180, window.innerWidth - 200)}px`;
-        menu.style.top = `${Math.min(btnRect.bottom + 4, window.innerHeight - 300)}px`;
+        // Position
+        menu.style.left = `${Math.min(event.clientX, window.innerWidth - 220)}px`;
+        menu.style.top  = `${Math.min(event.clientY, window.innerHeight - 200)}px`;
 
         document.body.appendChild(menu);
         this._contextMenu = menu;
@@ -1086,9 +890,9 @@ const EmulatorsPage = {
             // Parse index from serial (emulator-XXXX)
             const match = serial && serial.match(/emulator-(\d+)/);
             if (match) {
-                const port = parseInt(match[1]);
+                const port  = parseInt(match[1]);
                 const index = (port - 5554) / 2;
-                const inst = this._instances.find(i => i.index === index);
+                const inst  = this._instances.find(i => i.index === index);
                 if (inst) {
                     inst.running = data.status === 'online';
                     this.updateStats();
