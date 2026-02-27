@@ -11,10 +11,10 @@
  *   └────────────────────────────────────────────────────┘
  */
 const TaskRunnerPage = {
-    _selectedEmus: new Set(),
+
     _macros: [],
     _currentTab: 'emulators',
-    _runningMacros: new Map(),  // key=`${index}-${filename}`, value={startTime, timer, duration}
+    // key=`${index}-${filename}`, value={startTime, timer, duration}
 
     render() {
         return `
@@ -25,7 +25,7 @@ const TaskRunnerPage = {
                         <p>Manage targets, run macros, and perform scans.</p>
                     </div>
                     <div class="page-actions">
-                        <span class="text-sm text-muted" id="global-target-count">${this._selectedEmus.size} emulator(s) selected</span>
+                        <span class="text-sm text-muted" id="global-target-count">${GlobalStore.state.selectedEmus.length} emulator(s) selected</span>
                     </div>
                 </div>
 
@@ -34,7 +34,7 @@ const TaskRunnerPage = {
                     <button class="actions-tab active" data-tab="emulators" onclick="TaskRunnerPage.switchTab('emulators')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                         <span>Target Emulators</span>
-                        <span class="tab-count" id="tab-emu-count">${this._selectedEmus.size}</span>
+                        <span class="tab-count" id="tab-emu-count">${GlobalStore.state.selectedEmus.length}</span>
                     </button>
                     <button class="actions-tab" data-tab="recorder" onclick="TaskRunnerPage.switchTab('recorder')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
@@ -56,11 +56,14 @@ const TaskRunnerPage = {
                 </div>
                 <div class="card" style="padding:0;overflow:hidden">
                     <div class="live-feed" id="live-feed">
-                        <div class="feed-item">
-                            <span class="feed-dot active"></span>
-                            <span class="text-xs text-muted" style="min-width:60px">${new Date().toLocaleTimeString()}</span>
-                            <span>Select emulators → run actions to see progress here</span>
-                        </div>
+                        ${GlobalStore.state.activityLogs.map(log => `
+                            <div class="feed-item">
+                                <span class="feed-dot ${log.dotClass}"></span>
+                                <span class="text-xs text-muted" style="min-width:60px">${log.timeStr}</span>
+                                <span>${log.message}</span>
+                            </div>
+                        `).join('')}
+                    </div>
                     </div>
                 </div>
             </div>
@@ -71,6 +74,7 @@ const TaskRunnerPage = {
 
     switchTab(tab) {
         this._currentTab = tab;
+        GlobalStore.setCurrentTab(tab);   // ★ Persist tab choice
         document.querySelectorAll('.actions-tab').forEach(t =>
             t.classList.toggle('active', t.dataset.tab === tab)
         );
@@ -111,7 +115,7 @@ const TaskRunnerPage = {
                     <div id="emu-checklist" class="emu-checklist"></div>
                 </div>
                 <div class="tab-panel-footer">
-                    <span class="text-xs text-muted" id="emu-selected-count">${this._selectedEmus.size} selected</span>
+                    <span class="text-xs text-muted" id="emu-selected-count">${GlobalStore.state.selectedEmus.length} selected</span>
                 </div>
             </div>
         `;
@@ -137,7 +141,7 @@ const TaskRunnerPage = {
             }
 
             list.innerHTML = running.map(emu => {
-                const checked = this._selectedEmus.has(emu.index) ? 'checked' : '';
+                const checked = GlobalStore.state.selectedEmus.includes(emu.index) ? 'checked' : '';
                 const sel = checked ? 'selected' : '';
                 return `
                     <label class="emu-check-item ${sel}" id="emu-item-${emu.index}">
@@ -158,8 +162,8 @@ const TaskRunnerPage = {
     },
 
     toggleEmu(index, checked) {
-        if (checked) this._selectedEmus.add(index);
-        else this._selectedEmus.delete(index);
+        if (checked) (GlobalStore.state.selectedEmus.includes(index) ? null : GlobalStore.state.selectedEmus.push(index));
+        else GlobalStore.state.selectedEmus.splice(GlobalStore.state.selectedEmus.indexOf(index), 1);
         const item = document.getElementById(`emu-item-${index}`);
         if (item) item.classList.toggle('selected', checked);
         this._syncCounts();
@@ -171,8 +175,8 @@ const TaskRunnerPage = {
         cbs.forEach(cb => {
             cb.checked = !allChecked;
             const idx = parseInt(cb.value);
-            if (!allChecked) this._selectedEmus.add(idx);
-            else this._selectedEmus.delete(idx);
+            if (!allChecked) (GlobalStore.state.selectedEmus.includes(idx) ? null : GlobalStore.state.selectedEmus.push(idx));
+            else GlobalStore.state.selectedEmus.splice(GlobalStore.state.selectedEmus.indexOf(idx), 1);
             const item = document.getElementById(`emu-item-${idx}`);
             if (item) item.classList.toggle('selected', !allChecked);
         });
@@ -180,14 +184,14 @@ const TaskRunnerPage = {
     },
 
     _syncCounts() {
-        const n = this._selectedEmus.size;
+        const n = GlobalStore.state.selectedEmus.length;
         const u = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
         u('emu-selected-count', `${n} selected`);
         u('tab-emu-count', n);
         u('global-target-count', `${n} emulator(s) selected`);
     },
 
-    _getSelectedIndices() { return [...this._selectedEmus]; },
+    _getSelectedIndices() { return GlobalStore.state.selectedEmus; },
 
     // ═══════════════════════════════════════════
     // TAB 2: Operation Recorder
@@ -235,6 +239,28 @@ const TaskRunnerPage = {
                 const sizeKb = (m.size_bytes / 1024).toFixed(1);
                 const modified = new Date(m.modified * 1000).toLocaleDateString();
                 const key = `macro-card-${m.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+                // ★ CHECK GlobalStore for running state
+                const runData = GlobalStore.state.runningMacros[m.filename];
+                const isRunning = !!runData;
+
+                const statusHtml = isRunning ? `
+                    <div class="macro-running-bar">
+                        <span class="spinner" style="width:12px;height:12px"></span>
+                        <span class="macro-running-text">Running on ${runData.emulatorCount || '?'} emulator(s)...</span>
+                        <span class="macro-elapsed" id="${key}-elapsed"></span>
+                    </div>` : '';
+
+                const btnHtml = isRunning
+                    ? `<button class="btn btn-default btn-sm" style="width:100%;gap:6px" id="${key}-btn" disabled>
+                           <span class="spinner"></span> Running...
+                       </button>`
+                    : `<button class="btn btn-default btn-sm" style="width:100%;gap:6px" id="${key}-btn"
+                               onclick="TaskRunnerPage.runMacro('${m.filename}')">
+                           <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                           Run Script
+                       </button>`;
+
                 return `
                     <div class="macro-card" id="${key}">
                         <div class="macro-card-header">
@@ -248,14 +274,8 @@ const TaskRunnerPage = {
                                 <div class="macro-card-meta">${sizeKb} KB • ${modified}</div>
                             </div>
                         </div>
-                        <div class="macro-card-status" id="${key}-status"></div>
-                        <div class="macro-card-footer">
-                            <button class="btn btn-default btn-sm" style="width:100%;gap:6px" id="${key}-btn"
-                                    onclick="TaskRunnerPage.runMacro('${m.filename}')">
-                                <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                Run Script
-                            </button>
-                        </div>
+                        <div class="macro-card-status" id="${key}-status">${statusHtml}</div>
+                        <div class="macro-card-footer">${btnHtml}</div>
                     </div>
                 `;
             }).join('');
@@ -265,7 +285,7 @@ const TaskRunnerPage = {
     },
 
     async runMacro(filename) {
-        const indices = this._getSelectedIndices();
+        const indices = GlobalStore.state.selectedEmus;
         if (indices.length === 0) {
             Toast.warning('No Target', 'Select emulators in the Target Emulators tab first');
             return;
@@ -277,16 +297,11 @@ const TaskRunnerPage = {
         const btn = document.getElementById(`${cardKey}-btn`);
         const statusEl = document.getElementById(`${cardKey}-status`);
 
-        // Set running state
+        // Set local running UI state on action
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Running...';
         }
-
-        const startTime = Date.now();
-        let totalDuration = 0;
-
-        // Start elapsed timer
         if (statusEl) {
             statusEl.innerHTML = `
                 <div class="macro-running-bar">
@@ -297,20 +312,12 @@ const TaskRunnerPage = {
             `;
         }
 
-        if (this._runningMacros.has(filename)) {
-            clearInterval(this._runningMacros.get(filename));
-        }
-        const timerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const m = Math.floor(elapsed / 60);
-            const s = elapsed % 60;
-            const elEl = document.getElementById(`${cardKey}-elapsed`);
-            if (elEl) elEl.textContent = m > 0 ? `${m}m ${s}s` : `${s}s`;
-        }, 1000);
-        this._runningMacros.set(filename, timerInterval);
+        // Set state in the serializable GlobalStore
+        GlobalStore.setMacroRunning(filename, indices.length, 0);
 
         // Execute on all selected emulators
         let successCount = 0;
+        let totalDuration = 0;
         for (const idx of indices) {
             try {
                 const result = await API.runMacro(idx, filename);
@@ -326,53 +333,40 @@ const TaskRunnerPage = {
             }
         }
 
-        // Show estimated duration
-        const durationSec = Math.round(totalDuration / 1000);
-        const durationText = durationSec > 60
-            ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-            : `${durationSec}s`;
-
+        // Success flow
         if (successCount > 0) {
+            GlobalStore.setMacroRunning(filename, successCount, totalDuration); // update true duration
+
             Toast.success('Macro Started', `"${name}" running on ${successCount} emulator(s)`);
             NotificationManager.add('info', 'Macro Running', `"${name}" on ${successCount} instance(s)`);
 
-            // Keep timer running for estimated duration, then show "done"
-            if (totalDuration > 0) {
-                setTimeout(() => {
-                    clearInterval(timerInterval);
-                    this._runningMacros.delete(filename);
-                    if (statusEl) {
-                        statusEl.innerHTML = `
-                            <div class="macro-done-bar">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--emerald-500)"><polyline points="20 6 9 17 4 12"/></svg>
-                                <span>Completed • ${durationText}</span>
-                            </div>
-                        `;
-                    }
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Script';
-                    }
-                    // Ghi lại log hoàn thành cho TỪNG emulator
-                    for (const idx of indices) {
-                        this.addFeed('done', `✓ Macro "${name}" completed on Emulator #${idx} (≈${durationText})`);
-                    }
-                }, totalDuration);
-            } else {
-                // No duration info — reset after 3s
-                setTimeout(() => {
-                    clearInterval(timerInterval);
-                    this._runningMacros.delete(filename);
-                    if (statusEl) statusEl.innerHTML = '';
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Script';
-                    }
-                }, 3000);
-            }
+            const cleanUpHook = () => {
+                GlobalStore.removeMacroRunning(filename);
+                if (statusEl) {
+                    const durationSec = Math.round(totalDuration / 1000);
+                    const durationText = durationSec > 60 ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s` : `${durationSec}s`;
+                    statusEl.innerHTML = `
+                        <div class="macro-done-bar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--emerald-500)"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span>Completed • ${totalDuration > 0 ? durationText : 'Done'}</span>
+                        </div>
+                    `;
+                }
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Script';
+                }
+                for (const idx of indices) {
+                    this.addFeed('done', `✓ Macro "${name}" completed on Emulator #${idx}`);
+                }
+            };
+
+            if (totalDuration > 0) setTimeout(cleanUpHook, totalDuration);
+            else setTimeout(cleanUpHook, 3000);
+
         } else {
-            clearInterval(timerInterval);
-            this._runningMacros.delete(filename);
+            // Failure flow
+            GlobalStore.removeMacroRunning(filename);
             if (statusEl) statusEl.innerHTML = `<div class="macro-done-bar" style="color:var(--red-500)"><span>All executions failed</span></div>`;
             if (btn) {
                 btn.disabled = false;
@@ -431,7 +425,7 @@ const TaskRunnerPage = {
     },
 
     async runScan(type) {
-        if (this._selectedEmus.size === 0) {
+        if (GlobalStore.state.selectedEmus.length === 0) {
             Toast.warning('No Target', 'Select emulators in the Target Emulators tab first');
             return;
         }
@@ -447,7 +441,7 @@ const TaskRunnerPage = {
     // ── Shared Helpers ──
 
     _targetBadge() {
-        const n = this._selectedEmus.size;
+        const n = GlobalStore.state.selectedEmus.length;
         if (n === 0) {
             return `<div class="emu-selected-badge"><span class="badge badge-outline" style="font-size:12px;padding:4px 12px">⚠ No emulators selected — go to Target Emulators tab</span></div>`;
         }
@@ -455,24 +449,8 @@ const TaskRunnerPage = {
     },
 
     addFeed(dotClass, text) {
-        const feed = document.getElementById('live-feed');
-        if (!feed) return;
-
-        // Remove the initial placeholder if it exists (by checking if the first child is our hardcoded placeholder msg)
-        const firstChildSpan = feed.querySelector('.feed-item:last-child span:last-child');
-        if (firstChildSpan && firstChildSpan.textContent.includes('Select emulators → run actions')) {
-            feed.removeChild(feed.lastChild);
-        }
-
-        const item = document.createElement('div');
-        item.className = 'feed-item feed-item-enter';
-        item.innerHTML = `
-            <span class="feed-dot ${dotClass}"></span>
-            <span class="text-xs text-muted" style="min-width:60px">${new Date().toLocaleTimeString()}</span>
-            <span>${text}</span>
-        `;
-        feed.prepend(item);
-        while (feed.children.length > 50) feed.lastChild.remove();
+        // ★ CRITICAL FIX: Write to GlobalStore so logs survive page navigation
+        GlobalStore.addActivityLog(text, dotClass);
     },
 
     updateFromWS(event, data) {
@@ -496,6 +474,101 @@ const TaskRunnerPage = {
     },
 
     // ── Lifecycle ──
-    async init() { this._currentTab = 'emulators'; this.switchTab('emulators'); },
-    destroy() { },
+
+    _unsubscribeStore: null,
+    _uiTimer: null,
+
+    // Render ONLY the live-feed from GlobalStore (no full page re-render)
+    _renderLiveFeed() {
+        const liveFeed = document.getElementById('live-feed');
+        if (liveFeed) {
+            liveFeed.innerHTML = GlobalStore.state.activityLogs.map(log => `
+                <div class="feed-item">
+                    <span class="feed-dot ${log.dotClass}"></span>
+                    <span class="text-xs text-muted" style="min-width:60px">${log.timeStr}</span>
+                    <span>${log.message}</span>
+                </div>
+            `).join('');
+        }
+    },
+
+    _syncCountsFromStore() {
+        const n = GlobalStore.state.selectedEmus.length;
+        const u = (id, t) => { const e = document.getElementById(id); if (e) e.textContent = t; };
+        u('emu-selected-count', `${n} selected`);
+        u('tab-emu-count', n);
+        u('global-target-count', `${n} emulator(s) selected`);
+    },
+
+    // Re-apply running state to macro cards already in the DOM
+    _reconcileMacroCards() {
+        if (this._currentTab !== 'recorder') return;
+        if (!this._macros || this._macros.length === 0) return;
+
+        for (const m of this._macros) {
+            const cardKey = `macro-card-${m.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const btn = document.getElementById(`${cardKey}-btn`);
+            const statusEl = document.getElementById(`${cardKey}-status`);
+            const isRunning = !!GlobalStore.state.runningMacros[m.filename];
+
+            if (isRunning) {
+                const data = GlobalStore.state.runningMacros[m.filename];
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner"></span> Running...';
+                }
+                if (statusEl && !statusEl.querySelector('.macro-running-bar')) {
+                    statusEl.innerHTML = `
+                        <div class="macro-running-bar">
+                            <span class="spinner" style="width:12px;height:12px"></span>
+                            <span class="macro-running-text">Running on ${data.emulatorCount || '?'} emulator(s)...</span>
+                            <span class="macro-elapsed" id="${cardKey}-elapsed"></span>
+                        </div>
+                    `;
+                }
+            } else {
+                if (btn && btn.disabled) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Script';
+                }
+            }
+        }
+    },
+
+    // Tick elapsed timers purely from startTime in store
+    _startUIChecks() {
+        if (this._uiTimer) clearInterval(this._uiTimer);
+        this._uiTimer = setInterval(() => {
+            for (const [filename, data] of Object.entries(GlobalStore.state.runningMacros)) {
+                if (!data) continue;
+                const elapsed = Math.floor((Date.now() - data.startTime) / 1000);
+                const m = Math.floor(elapsed / 60);
+                const s = elapsed % 60;
+                const cardKey = `macro-card-${filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                const elEl = document.getElementById(`${cardKey}-elapsed`);
+                if (elEl) elEl.textContent = m > 0 ? `${m}m ${s}s` : `${s}s`;
+            }
+        }, 1000);
+    },
+
+    init() {
+        // Subscribe to store — update ONLY live parts, never full re-render
+        this._unsubscribeStore = GlobalStore.subscribe(() => {
+            if (router && router._currentPage === 'runner') {
+                this._renderLiveFeed();
+                this._syncCountsFromStore();
+                this._reconcileMacroCards();
+            }
+        });
+        this._startUIChecks();
+
+        // ★ CRITICAL FIX: Restore persisted tab from GlobalStore, NOT always 'emulators'
+        this._currentTab = GlobalStore.state.currentTab || 'emulators';
+        this.switchTab(this._currentTab);
+    },
+
+    destroy() {
+        if (this._unsubscribeStore) this._unsubscribeStore();
+        if (this._uiTimer) clearInterval(this._uiTimer);
+    }
 };

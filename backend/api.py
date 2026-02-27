@@ -45,16 +45,59 @@ async def index():
 
 @app.get("/api/devices")
 async def get_devices():
-    """List all registered emulators with status."""
+    """List all registered emulators with status and latest DB data."""
+    from backend.storage.database import database
     devices = emulator_manager.get_all()
-    return [d.to_dict() for d in devices]
+    
+    # Fetch latest data from database
+    db_data = await database.get_all_emulator_data()
+    serial_to_data = {row["serial"]: row for row in db_data}
+    
+    result = []
+    for d in devices:
+        d_dict = d.to_dict()
+        if d.serial in serial_to_data:
+            # Inject full_scan db data shape for the UI mapped in device-card.js
+            row_data = dict(serial_to_data[d.serial])
+            # Map flat resource columns to a nested 'resources' dict as expected by UI
+            row_data["resources"] = {
+                "gold": row_data.get("gold", 0),
+                "wood": row_data.get("wood", 0),
+                "ore": row_data.get("ore", 0),
+                "mana": row_data.get("mana", 0)
+            }
+            d_dict["data"] = row_data
+            d_dict["task_type"] = "full_scan"
+        result.append(d_dict)
+        
+    return result
 
 
 @app.post("/api/devices/refresh")
 async def refresh_devices():
-    """Re-discover ADB devices."""
+    """Re-discover ADB devices and load latest DB data."""
+    from backend.storage.database import database
     devices = emulator_manager.discover()
-    return {"count": len(devices), "devices": [d.to_dict() for d in devices]}
+    
+    db_data = await database.get_all_emulator_data()
+    serial_to_data = {row["serial"]: row for row in db_data}
+    
+    result = []
+    for d in devices:
+        d_dict = d.to_dict()
+        if d.serial in serial_to_data:
+            row_data = dict(serial_to_data[d.serial])
+            row_data["resources"] = {
+                "gold": row_data.get("gold", 0),
+                "wood": row_data.get("wood", 0),
+                "ore": row_data.get("ore", 0),
+                "mana": row_data.get("mana", 0)
+            }
+            d_dict["data"] = row_data
+            d_dict["task_type"] = "full_scan"  
+        result.append(d_dict)
+        
+    return {"count": len(devices), "devices": result}
 
 
 @app.get("/api/devices/health")
@@ -75,6 +118,29 @@ async def run_task(serial: str, task_type: str):
         tt = TaskType(task_type)
     except ValueError:
         return {"status": "error", "msg": f"Invalid task type: {task_type}"}
+
+    if tt == TaskType.FULL_SCAN:
+        # Route to the dedicated full scan orchestrator
+        from backend.core import full_scan
+        from backend.core import ldplayer_manager
+        from backend.websocket import ws_manager
+        
+        # Derive LDPlayer index from adb serial (emulator-5556 -> index 1)
+        try:
+            port = int(serial.split("-")[1])
+            idx = (port - 5554) // 2
+        except Exception:
+            return {"status": "error", "msg": "Cannot determine emulator index from serial"}
+            
+        all_emus = ldplayer_manager.list_all_instances()
+        name_map = {e["index"]: e["name"] for e in all_emus}
+        name = name_map.get(idx, f"Emulator-{idx}")
+        
+        result = full_scan.start_full_scan(idx, name, ws_callback=ws_manager.broadcast_sync)
+        if result.get("success"):
+            return {"status": "accepted", "task_id": f"fullscan-{idx}"}
+        else:
+            return {"status": "error", "msg": result.get("error")}
 
     task_id = task_queue.submit_task(serial, tt)
 
@@ -222,7 +288,7 @@ async def run_macro(index: int, filename: str):
     from backend.core import macro_replay
     import os
 
-    filepath = os.path.join(ldplayer_manager.OPERATIONS_DIR, filename)
+    filepath = os.path.join(ldplayer_manager._get_operations_dir(), filename)
     if not os.path.exists(filepath):
         return {"success": False, "error": f"Record file not found: {filename}"}
 
@@ -246,6 +312,77 @@ async def macro_status():
     from backend.core import macro_replay
     return macro_replay.get_status()
 
+
+# ──────────────────────────────────────────────
+# Full Scan (OCR Pipeline)
+# ──────────────────────────────────────────────
+
+@app.post("/api/scan/full")
+async def start_full_scan(indices: str):
+    """Start Full Scan on selected emulators.
+
+    Args:
+        indices: comma-separated emulator indices, e.g. "1,2,3"
+    """
+    from backend.core import full_scan
+    from backend.core import ldplayer_manager
+
+    index_list = [int(i.strip()) for i in indices.split(",") if i.strip().isdigit()]
+    if not index_list:
+        return {"success": False, "error": "No valid indices provided"}
+
+    # Get emulator names
+    all_emus = ldplayer_manager.list_all_instances()
+    name_map = {e["index"]: e["name"] for e in all_emus}
+
+    results = []
+    for idx in index_list:
+        name = name_map.get(idx, f"Emulator-{idx}")
+        result = full_scan.start_full_scan(
+            idx, name, ws_callback=ws_manager.broadcast_sync,
+        )
+        results.append(result)
+
+    return {"success": True, "scans": results}
+
+
+@app.get("/api/scan/status")
+async def scan_status():
+    """Get status of all running scans."""
+    from backend.core import full_scan
+    return full_scan.get_scan_status()
+
+
+@app.post("/api/scan/stop")
+async def stop_scan(index: int):
+    """Stop a running scan."""
+    from backend.core import full_scan
+    return full_scan.stop_scan(index)
+
+
+# ──────────────────────────────────────────────
+# Emulator Data (Scan Results)
+# ──────────────────────────────────────────────
+
+@app.get("/api/emulators/data")
+async def get_all_emulator_data():
+    """Get latest scan data for all emulators."""
+    return await database.get_all_emulator_data()
+
+
+@app.get("/api/emulators/{index}/data")
+async def get_emulator_data(index: int):
+    """Get latest scan data for a specific emulator."""
+    data = await database.get_emulator_data(emulator_index=index)
+    if data:
+        return data
+    return {"error": "No scan data found", "emulator_index": index}
+
+
+@app.get("/api/emulators/{index}/history")
+async def get_emulator_history(index: int, limit: int = 20):
+    """Get scan history for a specific emulator."""
+    return await database.get_emulator_scan_history(index, limit)
 
 # ──────────────────────────────────────────────
 # Startup

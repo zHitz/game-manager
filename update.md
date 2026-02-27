@@ -1,7 +1,34 @@
 # COD Game Automation Manager - Update Log
 
-## Version 1.0.2 (Current)
-*UI/UX Improvements for Accounts Page*
+## Version 1.0.3 (Current)
+*SPA State Persistence — Deep Root-Cause Fix (Production Safe)*
+
+- **Global State Management (`frontend/js/store.js`)**
+  - Cấu trúc lại **GlobalStore** sang dạng Singleton chuẩn Production: 
+    - Serializable State (Array thay Set, Object thay Map). Không chứa DOM hay timer refs.
+    - Tích hợp `sessionStorage` (auto save/load) để bảo vệ state ngay cả khi F5.
+    - `subscribe()` trả về hàm `unsubscribe()` chống Memory Leak.
+    - Thêm `currentTab` vào state → nhớ tab đang mở khi swap trang.
+    - Debug: `window.__STORE_DEBUG__` để kiểm tra state real-time.
+
+- **Root-Cause Bug Fixes (`frontend/js/pages/task-runner.js`)**
+  - **Bug #1 — `addFeed()` ghi trực tiếp vào DOM:** Trước đây hàm này tạo `<div>` bằng `createElement()` rồi `prepend()` vào `#live-feed`. Khi DOM bị `innerHTML = render()` tái tạo → tất cả logs biến mất. **Fix:** `addFeed()` giờ gọi thẳng `GlobalStore.addActivityLog()`, feed được render từ Store.
+  - **Bug #2 — `init()` luôn reset `_currentTab = 'emulators'`:** Mỗi lần Router gọi `init()` (khi quay lại trang Actions), tab luôn nhảy về Emulators thay vì ở Recorder. **Fix:** `init()` giờ đọc `GlobalStore.state.currentTab` để khôi phục đúng tab.
+  - **Bug #3 — `switchTab()` không lưu tab:** Khi click chuyển tab, giá trị `_currentTab` chỉ lưu local. **Fix:** `switchTab()` giờ gọi `GlobalStore.setCurrentTab(tab)` để persist.
+  - **Reconciliation:** Thêm `_reconcileMacroCards()` — khi quay lại trang, hệ thống tự động quét `GlobalStore.state.runningMacros` và gắn lại UI "Running..." + spinner cho đúng card, đồng thời tick bộ đếm thời gian từ `startTime` lưu trong Store.
+  - **Bug #4 — `loadMacros()` luôn render card ở trạng thái idle:** Hàm `loadMacros()` trước đây hardcode mọi card với nút "Run Script" bất kể macro đang chạy hay không. **Fix:** Giờ `loadMacros()` kiểm tra `GlobalStore.state.runningMacros[filename]` khi render từng card → nếu đang chạy thì hiển thị spinner, nút disabled "Running...", và thanh progress bar ngay lập tức.
+
+- **Full Scan OCR Pipeline Integration (Major Update)**
+  - **Pipeline Orchestration (`backend/core/full_scan.py`)**: Hoàn thiện thuật toán Full Scan gom tụ 5 bước (Profile, Resources, Hall, Market, Pet Token). Chạy background thread (Async Worker) đảm bảo 100% không block main server.
+  - **Thread-Safety Database Fix**: Khắc phục triệt để lỗi `RuntimeError: threads can only be started once` do xung đột `aiosqlite` event loop khi save data từ thread scan. Cấu trúc lại toàn bộ class `database.py` bỏ `await` kép.
+  - **Image Processing Tweak (`backend/core/screen_capture.py`)**: Tích hợp module xử lý crop ảnh trước khi build PDF cho OCR: Convert ảnh màu sang Grayscale (`L`), ép tương phản (`ImageOps.autocontrast`) và Scaling 4x (`LANCZOS`) để Tesseract/Cloud OCR đọc mượt hơn chữ nhỏ bé xíu.
+  - **API Payload Reshape (`backend/api.py`)**: Viết lại API `/api/devices` và `/devices/refresh` để chúng có thể chọc thẳng vào DB lấy data của `emulator_data` table. Gom các column phẳng: `gold, wood, ore, mana` thành nested object `resources` khớp 100% với Frontend struct.
+  - **WebSocket Full Scan UI Hooks (`frontend/js/app.js` & `device-card.js`)**: Đi dây các listener event mới (`scan_progress`, `scan_completed`, `scan_failed`). Sửa thanh Task Progress nhảy tự động (20% -> 60% -> 80%...) thay vì kẹt vĩnh viễn ở chữ "Starting...". Đổ thẳng dữ liệu Name, Power, Tài nguyên, Hall vào trang Dashboard ngay khi chạy xong mà không cần tải lại trang.
+  - **Hotfix Import Crashes**: Dọn dẹp module-level Constants `config.adb_path` bị gọi sai thời điểm ở các file `macro_replay.py`, `screen_capture.py`, `ldplayer_manager.py` gây lỗi 500 Network Error khi mới bật server.
+
+---
+
+## Version 1.0.2
 
 - **Accounts Table Redesign (`frontend/js/pages/accounts.js`)**
   - Áp dụng các **Quick Fixes** cho bảng hiển thị:

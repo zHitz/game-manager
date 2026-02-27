@@ -180,5 +180,33 @@ const DeviceCard = {
             const el = document.getElementById(`det-pet-${serial}`);
             if (el) el.textContent = data.token || '--';
         }
+
+        if (taskType === 'full_scan') {
+            const nameEl = document.getElementById(`meta-name-${serial}`);
+            const powerEl = document.getElementById(`meta-power-${serial}`);
+            if (nameEl) nameEl.textContent = `Name: ${data.lord_name || '--'}`;
+            if (powerEl) powerEl.textContent = `Power: ${this.formatNum(data.power)}`;
+
+            const detName = document.getElementById(`det-name-${serial}`);
+            const detPower = document.getElementById(`det-power-${serial}`);
+            if (detName) detName.textContent = data.lord_name || '--';
+            if (detPower) detPower.textContent = this.formatNum(data.power) || '--';
+
+            const detHall = document.getElementById(`det-hall-${serial}`);
+            if (detHall) detHall.textContent = data.hall_level || '--';
+
+            const detMarket = document.getElementById(`det-market-${serial}`);
+            if (detMarket) detMarket.textContent = data.market_level || '--';
+
+            const detPet = document.getElementById(`det-pet-${serial}`);
+            if (detPet) detPet.textContent = data.pet_token || '--';
+
+            if (data.resources) {
+                for (const res of ['gold', 'wood', 'ore', 'mana']) {
+                    const totalEl = document.getElementById(`det-${res}-total-${serial}`);
+                    if (totalEl) totalEl.textContent = this.formatNum(data.resources[res]);
+                }
+            }
+        }
     },
 };

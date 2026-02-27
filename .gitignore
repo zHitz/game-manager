@@ -1,0 +1,37 @@
+# Dependencies
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Data and Logs
+data/
+logs/
+*.log
+
+# Test and Debug folders
+TEST/
+tests/
+debug/
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# User-specific configuration
+api_keys.txt
+config.json
+*.local
+
+# Project specific ignores
+scan_captures/
+RAW_SCREENS/

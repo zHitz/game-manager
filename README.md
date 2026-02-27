@@ -52,6 +52,7 @@ UI_MANAGER/
 │   │   ├── components.css       # Cards, badges, buttons, macro cards
 │   │   └── animations.css       # Transitions, keyframes
 │   └── js/
+│       ├── store.js             # ★ Global State Management (Persistence)
 │       ├── app.js               # SPA router, WebSocket wiring
 │       ├── api.js               # API client (fetch wrapper + WS manager)
 │       ├── components/
@@ -59,9 +60,10 @@ UI_MANAGER/
 │       │   ├── notification.js  # NotificationManager (dropdown)
 │       │   └── toast.js         # Toast notifications
 │       └── pages/
-│           ├── dashboard.js     # Dashboard page
-│           ├── emulators.js     # ★ Emulator management (all instances)
-│           ├── task-runner.js   # ★ Actions page (tabs + macros + scans)
+│           ├── dashboard.js     # Dashboard page (Overview & Quick Scans)
+│           ├── accounts.js      # Game Accounts page (Detailed Stats & Grids)
+│           ├── emulators.js     # Emulator management (all instances)
+│           ├── task-runner.js   # Actions page (tabs + macros + scans)
 │           ├── history.js       # History page
 │           └── settings.js      # Settings page
 │
@@ -219,6 +221,24 @@ Three-tab layout with shared Activity Feed:
 
 ---
 
+### 4. Full Scan & OCR Pipeline (`full_scan.py` & `ocr_client.py`)
+
+Performs automated data extraction directly from the game screen using ADB screenshots and OCR, saving structured game metrics into the SQLite Database (`cod_manager.db`).
+
+#### Workflow
+1. Orchestrator triggers screen capture (`L` Grayscale, `autocontrast`, `LANCZOS` 4x upscale) via `screen_capture.py`
+2. OCR Client sends the optimized image to high-performance Cloud OCR (api.ocrapi.cloud)
+3. Regex parser extracts fields: `Lord Name`, `Power`, `Hall Level`, `Market Level`, `Pet Tokens`, `Resources (Gold, Wood, Ore, Mana)`
+4. Data is asynchronously saved to `emulator_data` table without blocking the FastAPI event loop.
+
+| Endpoint                  | Method | Description                                      |
+|---------------------------|--------|--------------------------------------------------|
+| `/api/tasks/run`          | POST   | Trigger `full_scan` orchestrator on a device     |
+| `/api/devices`            | GET    | List active devices injected with persistent DB stats |
+
+
+---
+
 ## CSS Architecture
 
 ```
@@ -262,11 +282,8 @@ Frontend handles these in `TaskRunnerPage.updateFromWS(event, data)` and `app.js
 ## Known Issues / TODO
 
 - [ ] **Tab UI consistency**: Some spacing/styling differences between the 3 tabs need polishing
-- [ ] **Macro progress tracking**: Frontend doesn't yet consume `macro_progress` WS events in real-time
-- [ ] **Macro stop button**: No "Stop" button on macro cards — API exists (`POST /api/macros/stop`) but no frontend UI
-- [ ] **Activity Feed persistence**: Feed clears on page navigation (no persistence)
 - [ ] **Responsive**: Tab bar scrolls horizontally on narrow screens but tab content may overflow
-- [ ] **Error handling**: Some API error cases show generic "Network Error" instead of specific messages
+- [ ] **Robust OCR Regions**: Move towards cropped area OCR scanning (`cod_app_sync_raw.py` integration) rather than full-screen text dumps for higher accuracy.
 
 ---
 

@@ -107,7 +107,12 @@ const DashboardPage = {
         try {
             const devices = await API.getDevices();
             this.updateStats(devices);
-            devices.forEach(d => DeviceCard.updateStatus(d.serial, d.status));
+            devices.forEach(d => {
+                DeviceCard.updateStatus(d.serial, d.status);
+                if (d.data) {
+                    DeviceCard.updateData(d.serial, d.task_type || 'full_scan', d.data);
+                }
+            });
         } catch (e) { /* silent */ }
     },
 
@@ -129,6 +134,12 @@ const DashboardPage = {
         list.innerHTML = '';
         devices.forEach(device => {
             list.appendChild(DeviceCard.create(device));
+            if (device.data) {
+                // Must be done after appending so DOM elements exist
+                setTimeout(() => {
+                    DeviceCard.updateData(device.serial, device.task_type || 'full_scan', device.data);
+                }, 0);
+            }
         });
     },
 

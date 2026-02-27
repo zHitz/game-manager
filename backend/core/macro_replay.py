@@ -20,7 +20,6 @@ import subprocess
 import os
 from backend.config import config
 
-ADB_PATH = config.adb_path
 
 # LDPlayer .record coordinates use a 20x scale of the recording resolution.
 # E.g., for 960x540: max_x = 960*20 = 19200, max_y = 540*20 = 10800.
@@ -44,7 +43,7 @@ def _get_target_resolution(serial: str) -> tuple:
     """Get the target emulator's screen resolution via ADB."""
     try:
         result = subprocess.run(
-            [ADB_PATH, "-s", serial, "shell", "wm", "size"],
+            [config.adb_path, "-s", serial, "shell", "wm", "size"],
             capture_output=True, text=True, timeout=5, encoding="utf-8",
         )
         # Output: "Physical size: 960x540"
@@ -60,7 +59,7 @@ def _get_target_resolution(serial: str) -> tuple:
 def _adb_tap(serial: str, x: int, y: int):
     """Send a tap event via ADB."""
     subprocess.run(
-        [ADB_PATH, "-s", serial, "shell",
+        [config.adb_path, "-s", serial, "shell",
          "input", "tap", str(x), str(y)],
         capture_output=True, timeout=5,
     )
@@ -70,7 +69,7 @@ def _adb_swipe(serial: str, x1: int, y1: int, x2: int, y2: int,
                duration_ms: int = 200):
     """Send a swipe event via ADB."""
     subprocess.run(
-        [ADB_PATH, "-s", serial, "shell",
+        [config.adb_path, "-s", serial, "shell",
          "input", "swipe",
          str(x1), str(y1), str(x2), str(y2), str(duration_ms)],
         capture_output=True, timeout=10,

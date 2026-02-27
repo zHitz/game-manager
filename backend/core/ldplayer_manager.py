@@ -7,21 +7,18 @@ import json
 import os
 from backend.config import config
 
-# Resolve ldconsole.exe path from adb_path
-# adb_path is like C:\LDPlayer\LDPlayer9\adb.exe
-# ldconsole is at    C:\LDPlayer\LDPlayer9\ldconsole.exe
-LDCONSOLE_PATH = os.path.join(
-    os.path.dirname(config.adb_path), "ldconsole.exe"
-)
+def _get_ldconsole_path():
+    return os.path.join(os.path.dirname(config.adb_path), "ldconsole.exe")
 
-OPERATIONS_DIR = os.path.join(
-    os.path.dirname(config.adb_path), "vms", "operationRecords"
-)
+
+def _get_operations_dir():
+    return os.path.join(os.path.dirname(config.adb_path), "vms", "operationRecords")
+
 
 
 def _run(args: list, timeout: int = 15) -> str:
     """Execute ldconsole command and return stdout."""
-    cmd = [LDCONSOLE_PATH] + args
+    cmd = [_get_ldconsole_path()] + args
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, encoding="utf-8"
@@ -30,7 +27,7 @@ def _run(args: list, timeout: int = 15) -> str:
     except subprocess.TimeoutExpired:
         return ""
     except FileNotFoundError:
-        print(f"[LDPlayer] ldconsole not found at: {LDCONSOLE_PATH}")
+        print(f"[LDPlayer] ldconsole not found at: {_get_ldconsole_path()}")
         return ""
 
 
@@ -98,7 +95,7 @@ def get_operations(index: int) -> list[dict]:
 
 
 def get_operation_info(index: int, filename: str) -> dict:
-    """Get detailed info about a macro script.
+    """"Get detailed info about a macro script.
 
     Uses `ldconsole operateinfo --index N --file <name>`.
     """
@@ -113,13 +110,14 @@ def get_operation_info(index: int, filename: str) -> dict:
 
 def list_record_files() -> list[dict]:
     """List all .record files from the operations directory."""
-    if not os.path.isdir(OPERATIONS_DIR):
+    op_dir = _get_operations_dir()
+    if not os.path.isdir(op_dir):
         return []
 
     records = []
-    for fname in os.listdir(OPERATIONS_DIR):
+    for fname in os.listdir(op_dir):
         if fname.endswith(".record"):
-            fpath = os.path.join(OPERATIONS_DIR, fname)
+            fpath = os.path.join(op_dir, fname)
             stat = os.stat(fpath)
             records.append({
                 "filename": fname,
@@ -133,7 +131,7 @@ def list_record_files() -> list[dict]:
 
 def load_record_content(filename: str) -> str:
     """Load the JSON content of a .record file."""
-    fpath = os.path.join(OPERATIONS_DIR, filename)
+    fpath = os.path.join(_get_operations_dir(), filename)
     if not os.path.exists(fpath):
         return ""
     with open(fpath, "r", encoding="utf-8") as f:
@@ -147,7 +145,8 @@ def run_operation(index: int, filename: str) -> dict:
     to pipe it as the --content argument (bypasses Windows CLI length limits).
     Also returns estimated duration from operateinfo.
     """
-    fpath = os.path.join(OPERATIONS_DIR, filename)
+    op_dir = _get_operations_dir()
+    fpath = os.path.join(op_dir, filename)
     if not os.path.exists(fpath):
         return {"success": False, "error": f"Record file not found: {filename}"}
 
@@ -171,19 +170,14 @@ def run_operation(index: int, filename: str) -> dict:
         tmp.close()
 
         # ldconsole operaterecord --index N --content "$(type tmpfile)"
-        # Use shell=True with file content read inline
-        cmd = (
-            f'"{LDCONSOLE_PATH}" operaterecord '
-            f'--index {index} '
-            f'--content "{tmp.name}"'
-        )
+        ld_path = _get_ldconsole_path()
 
         # Actually, ldconsole expects inline JSON, not a file path.
         # For small files: pass directly. For large: use PowerShell substitution.
         if len(content) < 8000:
             # Direct pass — fits in CLI
             result = subprocess.run(
-                [LDCONSOLE_PATH, "operaterecord",
+                [ld_path, "operaterecord",
                  "--index", str(index),
                  "--content", content],
                 capture_output=True, text=True, timeout=15, encoding="utf-8",
@@ -193,7 +187,7 @@ def run_operation(index: int, filename: str) -> dict:
             # Large file — use PowerShell to read and substitute
             ps_cmd = (
                 f'$c = Get-Content -Raw -Path "{tmp.name}"; '
-                f'& "{LDCONSOLE_PATH}" operaterecord '
+                f'& "{ld_path}" operaterecord '
                 f'--index {index} --content $c'
             )
             result = subprocess.run(
