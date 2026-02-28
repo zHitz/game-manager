@@ -18,6 +18,18 @@ from backend.models.scan_result import (
 )
 
 
+def _run_db_async(coro):
+    """Run an async DB coroutine from a background thread."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=10)
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
 class TaskQueue:
     """Manages task execution with emulator locking and progress tracking."""
 
@@ -79,6 +91,25 @@ class TaskQueue:
         )
 
         emu = emulator_manager.get(item.serial)
+        db_run_id = None
+
+        # ── Persist task start to DB ──
+        try:
+            from backend.storage.database import database
+            emu_id = _run_db_async(
+                database.upsert_emulator(-1, item.serial)
+            )
+            db_run_id = _run_db_async(
+                database.save_task_run(
+                    emulator_id=emu_id,
+                    task_type=item.task_type.value,
+                    status="running",
+                )
+            )
+        except Exception as db_err:
+            print(f"[TaskQueue] DB save warning: {db_err}")
+
+        item._db_run_id = db_run_id
 
         try:
             # Step 1: Acquire emulator lock
@@ -231,7 +262,7 @@ class TaskQueue:
         return data, combined
 
     def _finalize(self, item: TaskQueueItem, result: TaskResult):
-        """Finalize task: update timing, store history, emit event."""
+        """Finalize task: update timing, store history, persist to DB, emit event."""
         result.finished_at = datetime.now()
         if result.started_at:
             result.duration_ms = int(
@@ -246,6 +277,26 @@ class TaskQueue:
         self._history.append(result)
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
+
+        # ── Persist to DB ──
+        db_run_id = getattr(item, '_db_run_id', None)
+        if db_run_id:
+            try:
+                import json
+                from backend.storage.database import database
+                db_status = "success" if result.status == TaskStatus.SUCCESS else "failed"
+                _run_db_async(
+                    database.update_task_run(
+                        run_id=db_run_id,
+                        status=db_status,
+                        error=result.error or "",
+                        duration_ms=result.duration_ms,
+                        result_json=json.dumps(result.data, default=str) if result.data else "",
+                        finished_at=result.finished_at.isoformat(),
+                    )
+                )
+            except Exception as db_err:
+                print(f"[TaskQueue] DB update warning: {db_err}")
 
         # Emit completion event
         event = "task_completed" if result.status == TaskStatus.SUCCESS else "task_failed"

@@ -84,7 +84,7 @@ def _scan_worker(emulator_index: int, emulator_name: str,
 
         # Run async save in event loop
         async def _save():
-            await database.save_emulator_data(
+            await database.save_scan_snapshot(
                 emulator_index=emulator_index,
                 serial=serial,
                 emulator_name=emulator_name,

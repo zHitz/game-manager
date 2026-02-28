@@ -10,6 +10,7 @@ const router = {
         history: HistoryPage,
         emulators: EmulatorsPage,
         accounts: AccountsPage,
+        workflow: WorkflowPage,
         settings: SettingsPage,
     },
 
@@ -19,6 +20,7 @@ const router = {
         history: 'History',
         emulators: 'Emulators',
         accounts: 'Accounts',
+        workflow: 'Workflows',
         settings: 'Settings',
     },
 

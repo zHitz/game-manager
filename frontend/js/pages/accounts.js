@@ -3,47 +3,26 @@
  * Shows a detailed table of Game Accounts with an off-canvas Slide Profile View.
  */
 const AccountsPage = {
-    _mockData: [
-        {
-            id: 1, emuName: 'LDPlayer-01', ingameName: 'DragonSlayer', pow: '12.5',
-            loginMethod: 'Google', email: 'dragon@gmail.com', provider: 'Global',
-            emulator: '#1', hallLvl: 25, marketLvl: 24, alliance: '[KOR] Warriors',
-            accountsTotal: 3, accMatching: 'Yes', note: 'Main account', status: 'online', trendToken: 'up',
-            gold: '1.2', wood: '5.5', ore: '2.1', petToken: 450
-        },
-        {
-            id: 2, emuName: 'LDPlayer-02', ingameName: 'FarmBot_01', pow: '2.1',
-            loginMethod: 'Facebook', email: 'farm01@yahoo.com', provider: 'Global',
-            emulator: '#2', hallLvl: 11, marketLvl: 10, alliance: 'None',
-            accountsTotal: 1, accMatching: 'No', note: 'Farm wood fast', status: 'offline', trendToken: 'up',
-            gold: '0.1', wood: '12.0', ore: '0.5', petToken: 12
-        },
-        {
-            id: 3, emuName: 'LDPlayer-03', ingameName: 'FarmBot_02', pow: '1.8',
-            loginMethod: 'Facebook', email: 'farm02@yahoo.com', provider: 'Global',
-            emulator: '#3', hallLvl: 9, marketLvl: 9, alliance: 'None',
-            accountsTotal: 1, accMatching: 'No', note: 'Farm ore', status: 'online', trendToken: 'down',
-            gold: '0.2', wood: '1.0', ore: '15.5', petToken: 5
-        },
-        {
-            id: 4, emuName: 'LDPlayer-04', ingameName: 'SniperWolf', pow: '8.4',
-            loginMethod: 'Apple', email: '-', provider: 'Global',
-            emulator: '#4', hallLvl: 22, marketLvl: 20, alliance: '[US] Eagles',
-            accountsTotal: 2, accMatching: 'Yes', note: 'Alt attack', status: 'offline', trendToken: 'up',
-            gold: '4.5', wood: '2.2', ore: '3.1', petToken: 120
-        },
-        {
-            id: 5, emuName: 'LDPlayer-05', ingameName: 'MinerKing', pow: '3.5',
-            loginMethod: 'Google', email: 'miner@gmail.com', provider: 'Asia',
-            emulator: '#5', hallLvl: 15, marketLvl: 15, alliance: '[KOR] Warriors',
-            accountsTotal: 5, accMatching: 'Yes', note: 'Supply main', status: 'online', trendToken: 'up',
-            gold: '25.0', wood: '18.0', ore: '22.0', petToken: 60
-        }
-    ],
-
+    _accountsData: [],
     _selectedAccountId: null,
     _activeDetailTab: 'overview',
     _viewMode: 'table',
+    _isLoading: true,
+
+    formatResource(valAbs) {
+        if (!valAbs || isNaN(valAbs)) return '0M';
+        if (valAbs >= 1000000000) return (valAbs / 1000000000).toFixed(1) + 'B';
+        if (valAbs >= 1000000) return (valAbs / 1000000).toFixed(1) + 'M';
+        if (valAbs >= 1000) return (valAbs / 1000).toFixed(1) + 'K';
+        return valAbs.toString();
+    },
+
+    formatPower(valAbs) {
+        if (!valAbs || isNaN(valAbs)) return '0M';
+        if (valAbs >= 1000000000) return (valAbs / 1000000000).toFixed(1) + 'B';
+        if (valAbs >= 1000000) return (valAbs / 1000000).toFixed(1) + 'M';
+        return valAbs.toLocaleString();
+    },
 
     render() {
         return `
@@ -98,7 +77,7 @@ const AccountsPage = {
                 .th-col.accent { color: var(--primary); }
 
                 /* ── GRID / CARD LIST ── */
-                .account-list { display: flex; flex-direction: column; gap: 8px; }
+                .account-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
 
                 .account-card {
                     background: var(--card); border: 1px solid var(--border);
@@ -327,7 +306,7 @@ const AccountsPage = {
                     <div class="page-header-info">
                         <h2 style="margin:0 0 4px;">Game Accounts</h2>
                         <div style="display:flex; align-items:center; gap: 14px; flex-wrap: wrap;">
-                            <p style="margin:0; color: var(--muted-foreground); font-size:13px;">${this._mockData.length} accounts connected</p>
+                            <p style="margin:0; color: var(--muted-foreground); font-size:13px;">${this._isLoading ? 'Loading...' : this._accountsData.length + ' accounts connected'}</p>
                             <!-- View Toggle -->
                             <div style="display:flex; background: var(--card); border-radius: 6px; padding: 2px; border: 1px solid var(--border);">
                                 <button class="btn btn-sm" style="padding: 4px 12px; border:none; border-radius: 4px; font-size:12px; display:flex; align-items:center; gap:5px; ${this._viewMode === 'table' ? 'background:var(--primary); color:white; font-weight:600;' : 'background:transparent; color:var(--muted-foreground);'}" onclick="AccountsPage.toggleViewMode('table')">
@@ -344,11 +323,11 @@ const AccountsPage = {
                             <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Export CSV
                         </button>
-                        <button class="btn btn-outline btn-sm" style="display:flex;align-items:center;gap:6px;">
+                        <button class="btn btn-outline btn-sm" style="display:flex;align-items:center;gap:6px;" onclick="AccountsPage.fetchData()">
                             <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                             Sync All
                         </button>
-                        <button class="btn btn-primary btn-sm" style="display:flex;align-items:center;gap:6px;">
+                        <button class="btn btn-primary btn-sm" style="display:flex;align-items:center;gap:6px;" onclick="AccountsPage.openAddForm()">
                             <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             Add Account
                         </button>
@@ -409,52 +388,68 @@ const AccountsPage = {
     },
 
     _renderTableBody() {
-        return this._mockData.map((row) => {
-            const dotClass = row.status === 'online' ? 'status-dot-on' : 'status-dot-off';
-            const loginColor = row.loginMethod === 'Google' ? '#EA4335' : row.loginMethod === 'Facebook' ? '#1877F2' : '#555';
-            const isSelected = this._selectedAccountId === row.id;
+        if (this._isLoading) {
+            return `<tr><td colspan="17" style="text-align:center;padding:40px;color:var(--muted-foreground);">Loading accounts...</td></tr>`;
+        }
+        if (this._accountsData.length === 0) {
+            return `<tr><td colspan="17" style="text-align:center;padding:40px;color:var(--muted-foreground);">No accounts found.</td></tr>`;
+        }
+        return this._accountsData.map((row) => {
+            const statusStr = (row.emu_status || 'offline').toLowerCase();
+            const dotClass = statusStr === 'online' ? 'status-dot-on' : 'status-dot-off';
+            const loginMethod = row.login_method || '—';
+            const loginColor = loginMethod === 'Google' ? '#EA4335' : loginMethod === 'Facebook' ? '#1877F2' : '#555';
+            const isSelected = this._selectedAccountId === row.account_id;
+
+            // Format metrics
+            const powFormatted = AccountsPage.formatPower(row.power);
+            const goldFormatted = AccountsPage.formatResource(row.gold);
+            const woodFormatted = AccountsPage.formatResource(row.wood);
+            const oreFormatted = AccountsPage.formatResource(row.ore);
+            const accMatching = row.lord_name ? 'Yes' : 'No';
+            const accountsTotal = row.provider ? 1 : 0; // naive total
+            const ingameName = row.lord_name || '—';
+            const displayEmail = row.email || '—';
+            const displayAlliance = row.alliance || '—';
+
             return `
-            <tr class="account-row${isSelected ? ' selected' : ''}" onclick="AccountsPage.openDetail(${row.id})">
-                <td class="freeze-col-1 stt-col" style="padding:11px 0 11px 14px;font-size:12px;color:var(--muted-foreground);">${row.id}</td>
+            <tr class="account-row${isSelected ? ' selected' : ''}" onclick="AccountsPage.openDetail(${row.account_id})">
+                <td class="freeze-col-1 stt-col" style="padding:11px 0 11px 14px;font-size:12px;color:var(--muted-foreground);">${row.account_id}</td>
                 <td class="freeze-col-2" style="padding:11px 14px;font-size:13px;">
                     <div style="display:flex;align-items:center;gap:7px;">
-                        <span class="${dotClass}" title="${row.status}"></span>
-                        <span style="font-weight:500;">${row.emuName}</span>
+                        <span class="${dotClass}" title="${statusStr}"></span>
+                        <span style="font-weight:500;">${row.emu_name || 'LDP-' + row.emu_index}</span>
                     </div>
                 </td>
-                <td class="freeze-col-3" style="padding:11px 14px;font-size:13px;font-weight:700;color:var(--primary);border-right:2px solid var(--border);">${row.ingameName}</td>
-                <td style="padding:11px 14px;text-align:right;font-family:monospace;font-weight:700;font-size:13px;border-left:1px solid var(--border);">${row.pow}</td>
+                <td class="freeze-col-3" style="padding:11px 14px;font-size:13px;font-weight:700;color:var(--primary);border-right:2px solid var(--border);">${ingameName}</td>
+                <td style="padding:11px 14px;text-align:right;font-family:monospace;font-weight:700;font-size:13px;border-left:1px solid var(--border);">${powFormatted}</td>
                 <td style="padding:11px 14px;font-size:13px;">
-                    <span style="border:1px solid ${loginColor}22;background:${loginColor}10;color:${loginColor};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${row.loginMethod}</span>
+                    <span style="border:1px solid ${loginColor}22;background:${loginColor}10;color:${loginColor};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${loginMethod}</span>
                 </td>
-                <td style="padding:11px 14px;font-size:12px;color:var(--muted-foreground);max-width:160px;overflow:hidden;text-overflow:ellipsis;">${row.email}</td>
+                <td style="padding:11px 14px;font-size:12px;color:var(--muted-foreground);max-width:160px;overflow:hidden;text-overflow:ellipsis;">${displayEmail}</td>
                 <td style="padding:11px 14px;font-size:13px;">
-                    <span style="background:var(--muted);color:var(--foreground);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">${row.emulator}</span>
+                    <span style="background:var(--muted);color:var(--foreground);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">#${row.emu_index}</span>
                 </td>
                 <td style="padding:11px 14px;text-align:center;">
-                    ${row.accMatching === 'Yes'
-                        ? '<span class="badge-status-yes">✓ Linked</span>'
-                        : '<span class="badge-status-no">✗ None</span>'}
+                    ${accMatching === 'Yes'
+                    ? '<span class="badge-status-yes">✓ Linked</span>'
+                    : '<span class="badge-status-no">✗ None</span>'}
                 </td>
-                <td style="padding:11px 14px;text-align:right;font-weight:700;font-size:13px;border-left:1px solid var(--border);">${row.hallLvl}</td>
-                <td style="padding:11px 14px;text-align:right;font-weight:700;font-size:13px;">${row.marketLvl}</td>
-                <td style="padding:11px 14px;font-size:12px;color:var(--muted-foreground);">${row.alliance}</td>
-                <td style="padding:11px 14px;text-align:center;font-size:13px;">${row.accountsTotal}</td>
+                <td style="padding:11px 14px;text-align:right;font-weight:700;font-size:13px;border-left:1px solid var(--border);">${row.hall_level || 0}</td>
+                <td style="padding:11px 14px;text-align:right;font-weight:700;font-size:13px;">${row.market_level || 0}</td>
+                <td style="padding:11px 14px;font-size:12px;color:var(--muted-foreground);">${displayAlliance}</td>
+                <td style="padding:11px 14px;text-align:center;font-size:13px;">${accountsTotal}</td>
                 <td style="padding:11px 14px;text-align:right;border-left:1px solid var(--border);">
-                    <span class="resource-val" style="color:var(--yellow-600,#d97706);font-size:13px;">${row.gold}M</span>
-                    <span style="color:${row.trendToken==='up'?'var(--emerald-500)':'var(--red-500)'};font-size:10px;margin-left:2px;">${row.trendToken==='up'?'↑':'↓'}</span>
+                    <span class="resource-val" style="color:var(--yellow-600,#d97706);font-size:13px;">${goldFormatted}</span>
                 </td>
                 <td style="padding:11px 14px;text-align:right;">
-                    <span class="resource-val" style="color:var(--emerald-600,#059669);font-size:13px;">${row.wood}M</span>
-                    <span style="color:var(--emerald-500);font-size:10px;margin-left:2px;">↑</span>
+                    <span class="resource-val" style="color:var(--emerald-600,#059669);font-size:13px;">${woodFormatted}</span>
                 </td>
                 <td style="padding:11px 14px;text-align:right;">
-                    <span class="resource-val" style="color:var(--indigo-500,#6366f1);font-size:13px;">${row.ore}M</span>
-                    <span style="color:var(--red-500);font-size:10px;margin-left:2px;">↓</span>
+                    <span class="resource-val" style="color:var(--indigo-500,#6366f1);font-size:13px;">${oreFormatted}</span>
                 </td>
                 <td style="padding:11px 14px;text-align:right;">
-                    <span class="resource-val" style="color:var(--orange-500,#f97316);font-size:13px;">${row.petToken}</span>
-                    <span style="color:var(--emerald-500);font-size:10px;margin-left:2px;">↑</span>
+                    <span class="resource-val" style="color:var(--orange-500,#f97316);font-size:13px;">${row.pet_token || 0}</span>
                 </td>
                 <td style="padding:11px 14px;">
                     <div class="hover-actions-arrow">
@@ -467,26 +462,37 @@ const AccountsPage = {
     },
 
     _renderGridBody() {
-        return this._mockData.map((row, index) => {
-            const statusClass = row.status === 'online' ? 'status-online' : row.status === 'idle' ? 'status-idle' : 'status-offline';
-            const powerPct = Math.min((parseFloat(row.pow) / 30) * 100, 100);
+        if (this._isLoading) {
+            return `<div style="text-align:center;padding:40px;color:var(--muted-foreground);">Loading accounts...</div>`;
+        }
+        if (this._accountsData.length === 0) {
+            return `<div style="text-align:center;padding:40px;color:var(--muted-foreground);">No accounts found.</div>`;
+        }
+        return this._accountsData.map((row, index) => {
+            const statusStr = (row.emu_status || 'offline').toLowerCase();
+            const statusClass = statusStr === 'online' ? 'status-online' : statusStr === 'idle' ? 'status-idle' : 'status-offline';
+            const powFormatted = AccountsPage.formatPower(row.power);
+            const powerPct = Math.min((parseFloat((row.power / 1000000).toFixed(1)) / 30) * 100, 100);
+            const ingameName = row.lord_name || '—';
+            const displayAlliance = row.alliance || '—';
+
             return `
-            <div class="account-card ${statusClass}" onclick="AccountsPage.openDetail(${row.id})" style="animation: fadeIn 0.28s ease ${index * 0.05}s both;">
+            <div class="account-card ${statusClass}" onclick="AccountsPage.openDetail(${row.account_id})" style="animation: fadeIn 0.28s ease ${index * 0.05}s both;">
                 <div class="card-dot"></div>
                 <div class="account-info">
                     <div class="account-name">
-                        ${row.ingameName}
-                        <span class="alliance-badge">${row.alliance !== 'None' ? row.alliance : '—'}</span>
+                        ${ingameName}
+                        <span class="alliance-badge">${displayAlliance !== '—' ? displayAlliance : '—'}</span>
                     </div>
-                    <div class="account-emulator">${row.emuName} · ${row.emulator}</div>
+                    <div class="account-emulator">${row.emu_name || 'LDP-' + row.emu_index} · #${row.emu_index}</div>
                 </div>
                 <div class="account-power">
                     <div class="power-label">
-                        <span class="power-value">${row.pow}M power</span>
-                        <span class="power-hall">Hall ${row.hallLvl}</span>
+                        <span class="power-value">${powFormatted} power</span>
+                        <span class="power-hall">Hall ${row.hall_level || 0}</span>
                     </div>
                     <div class="power-bar"><div class="power-fill" style="width:${powerPct}%"></div></div>
-                    <div class="sync-time">Synced 2m ago</div>
+                    <div class="sync-time">Synced: ${row.last_scan_at ? new Date(row.last_scan_at).toLocaleTimeString() : 'Never'}</div>
                 </div>
                 <div class="card-actions">
                     <button class="card-btn-view" onclick="event.stopPropagation(); AccountsPage.openDetail(${row.id})">
@@ -504,8 +510,202 @@ const AccountsPage = {
     toggleViewMode(mode) {
         if (this._viewMode === mode) return;
         this._viewMode = mode;
-        const mc = document.querySelector('.main-content');
-        if (mc) mc.innerHTML = this.render();
+        const appContainer = document.getElementById('page-root');
+        if (appContainer) appContainer.innerHTML = this.render();
+    },
+
+    openAddForm() {
+        this._selectedAccountId = null; // No selected account means "adding new"
+        const panel = document.getElementById('accounts-slide-panel');
+        const overlay = document.getElementById('accounts-slide-overlay');
+        if (panel && overlay) {
+            panel.innerHTML = this._renderAddEditForm('add');
+            void panel.offsetWidth;
+            panel.classList.add('active');
+            overlay.classList.add('active');
+        }
+    },
+
+    openEditForm(id) {
+        this._selectedAccountId = id;
+        const panel = document.getElementById('accounts-slide-panel');
+        const overlay = document.getElementById('accounts-slide-overlay');
+        if (panel && overlay) {
+            panel.innerHTML = this._renderAddEditForm('edit');
+            void panel.offsetWidth;
+            panel.classList.add('active');
+            overlay.classList.add('active');
+        }
+    },
+
+    _renderAddEditForm(mode) {
+        let acc = {};
+        if (mode === 'edit') {
+            acc = this._accountsData.find(a => a.account_id == this._selectedAccountId) || {};
+        }
+
+        const title = mode === 'add' ? 'Add New Account' : 'Edit Account';
+        const isEdit = mode === 'edit';
+
+        return `
+            <div class="panel-header" style="flex-direction: column; gap:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <h2 style="margin:0;font-size:20px;font-weight:800;">${title}</h2>
+                    <button onclick="AccountsPage.closeDetail()" style="width:32px;height:32px;border-radius:8px;background:var(--muted);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted-foreground);" title="Close">
+                        <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-body" style="padding: 24px 28px;">
+                <form id="accounts-add-edit-form" onsubmit="event.preventDefault(); AccountsPage.saveAccount('${mode}');">
+                    
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Emulator Index <span style="color:var(--red-500)">*</span></label>
+                        <input type="number" id="form-emu-index" value="${acc.emu_index !== undefined ? acc.emu_index : ''}" required ${isEdit ? 'readonly' : ''} style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);" />
+                        ${isEdit ? '<p style="font-size:11px;color:var(--muted-foreground);margin-top:4px;">Emulator index cannot be changed.</p>' : ''}
+                    </div>
+
+                    <div style="display:flex; gap:16px; margin-bottom:20px;">
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">In-game Lord Name</label>
+                            <input type="text" id="form-lord-name" value="${acc.lord_name || ''}" ${isEdit ? 'disabled' : ''} style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);" />
+                        </div>
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Power (M)</label>
+                            <input type="number" step="0.1" id="form-power" value="${isEdit ? (acc.power ? (acc.power / 1000000).toFixed(1) : '') : ''}" ${isEdit ? 'disabled' : ''} style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);" />
+                        </div>
+                    </div>
+                    ${isEdit ? '<p style="font-size:11px;color:var(--muted-foreground); margin-top:-14px; margin-bottom:20px;">Identity metrics synchronize automatically via OCR.</p>' : ''}
+
+                    <div style="display:flex; gap:16px; margin-bottom:20px;">
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Login Method</label>
+                            <select id="form-login-method" style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);">
+                                <option value="" ${!acc.login_method ? 'selected' : ''}>-- Select --</option>
+                                <option value="Google" ${acc.login_method === 'Google' ? 'selected' : ''}>Google</option>
+                                <option value="Facebook" ${acc.login_method === 'Facebook' ? 'selected' : ''}>Facebook</option>
+                                <option value="Apple" ${acc.login_method === 'Apple' ? 'selected' : ''}>Apple</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Login Email</label>
+                            <input type="email" id="form-email" value="${acc.email || ''}" style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);" />
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:16px; margin-bottom:20px;">
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Provider</label>
+                            <select id="form-provider" style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);">
+                                <option value="Global" ${acc.provider === 'Global' ? 'selected' : ''}>Global / Main</option>
+                                <option value="Sub-account" ${acc.provider === 'Sub-account' ? 'selected' : ''}>Sub-account</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Alliance Tag</label>
+                            <input type="text" id="form-alliance" value="${acc.alliance || ''}" style="width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);" />
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:24px;">
+                        <label style="display:block; font-size:12px; font-weight:700; color:var(--muted-foreground); margin-bottom:6px;">Internal Notes</label>
+                        <textarea id="form-note" style="width:100%; min-height:80px; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--foreground);">${acc.note || ''}</textarea>
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; gap:12px;">
+                        <span id="form-save-feedback" style="align-self:center; font-size:12px; font-weight:600; color:var(--emerald-500); opacity:0; transition:opacity 0.3s;">Saved</span>
+                        <button type="button" class="btn btn-outline" onclick="AccountsPage.closeDetail()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Account</button>
+                    </div>
+
+                </form>
+            </div>
+        `;
+    },
+
+    async saveAccount(mode) {
+        const emuIndex = document.getElementById('form-emu-index').value;
+        const loginMethod = document.getElementById('form-login-method').value;
+        const email = document.getElementById('form-email').value;
+        const provider = document.getElementById('form-provider').value;
+        const alliance = document.getElementById('form-alliance').value;
+        const note = document.getElementById('form-note').value;
+
+        let payload = {
+            emu_index: emuIndex,
+            login_method: loginMethod,
+            email: email,
+            provider: provider,
+            alliance: alliance,
+            note: note
+        };
+
+        if (mode === 'add') {
+            const lordName = document.getElementById('form-lord-name').value;
+            const powerM = document.getElementById('form-power').value;
+            payload.lord_name = lordName;
+            payload.power = powerM ? parseFloat(powerM) * 1000000 : 0;
+
+            try {
+                const res = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    document.getElementById('form-save-feedback').style.opacity = '1';
+                    setTimeout(() => {
+                        this.closeDetail();
+                        this.fetchData();
+                    }, 500);
+                } else {
+                    if (window.app && app.showUtilsToast) app.showUtilsToast('Add Failed: ' + data.error);
+                }
+            } catch (err) {
+                if (window.app && app.showUtilsToast) app.showUtilsToast('Network error saving account');
+            }
+        } else if (mode === 'edit') {
+            try {
+                const res = await fetch(`/api/accounts/${emuIndex}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    document.getElementById('form-save-feedback').style.opacity = '1';
+                    setTimeout(() => {
+                        this.fetchData().then(() => {
+                            if (this._selectedAccountId) {
+                                this.openDetail(this._selectedAccountId);
+                            }
+                        });
+                    }, 500);
+                } else {
+                    if (window.app && app.showUtilsToast) app.showUtilsToast('Update Failed: ' + data.error);
+                }
+            } catch (err) {
+                if (window.app && app.showUtilsToast) app.showUtilsToast('Network error saving account');
+            }
+        }
+    },
+
+    async deleteAccount(emuIndex) {
+        if (!confirm('Are you sure you want to delete this account? Identity scan records will also be erased.')) return;
+        try {
+            const res = await fetch(`/api/accounts/${emuIndex}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.status === 'deleted') {
+                this.closeDetail();
+                this.fetchData();
+            } else {
+                if (window.app && app.showUtilsToast) app.showUtilsToast('Delete Failed: ' + data.error);
+            }
+        } catch (err) {
+            if (window.app && app.showUtilsToast) app.showUtilsToast('Network error deleting account');
+        }
     },
 
     openDetail(id) {
@@ -540,13 +740,20 @@ const AccountsPage = {
     },
 
     _renderSlideContent() {
-        const acc = this._mockData.find(a => a.id === this._selectedAccountId);
+        const acc = this._accountsData.find(a => a.account_id === this._selectedAccountId);
         if (!acc) return '';
 
-        const avatarInitial = acc.ingameName.charAt(0).toUpperCase();
-        const isOnline = acc.status === 'online';
+        const ingameName = acc.lord_name || 'No Name';
+        const avatarInitial = ingameName.charAt(0).toUpperCase();
+        const isOnline = (acc.emu_status || '').toLowerCase() === 'online';
         const statusColor = isOnline ? 'var(--emerald-500)' : 'var(--red-500,#ef4444)';
         const statusLabel = isOnline ? 'Online' : 'Offline';
+        const emuDisplay = acc.emu_name || 'LDP-' + acc.emu_index;
+        const powFormatted = AccountsPage.formatPower(acc.power);
+        const accMatching = acc.lord_name ? 'Yes' : 'No';
+        const accountsTotal = acc.provider ? 1 : 0;
+        const displayAlliance = acc.alliance || 'No alliance';
+        const timeAgo = acc.last_scan_at ? new Date(acc.last_scan_at).toLocaleTimeString() : 'Never';
 
         return `
             <!-- Panel Header -->
@@ -562,27 +769,27 @@ const AccountsPage = {
                     </div>
                     <div>
                         <div style="display:flex;align-items:center;gap:10px;">
-                            <h2 style="margin:0;font-size:20px;font-weight:800;">${acc.ingameName}</h2>
+                            <h2 style="margin:0;font-size:20px;font-weight:800;">${ingameName}</h2>
                             <span style="font-size:11px;font-weight:700;background:${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${statusColor};border:1px solid ${isOnline ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'};padding:2px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;">
                                 <span style="width:6px;height:6px;border-radius:50%;background:${statusColor};${isOnline ? 'box-shadow:0 0 5px var(--emerald-500);' : ''}display:inline-block;"></span>
                                 ${statusLabel}
                             </span>
                         </div>
                         <div style="font-size:12px;color:var(--muted-foreground);margin-top:3px;display:flex;gap:8px;align-items:center;">
-                            <span>${acc.emuName}</span>
+                            <span>${emuDisplay}</span>
                             <span style="color:var(--border);">|</span>
-                            <span>Target ${acc.emulator}</span>
+                            <span>Target #${acc.emu_index}</span>
                             <span style="color:var(--border);">|</span>
-                            <span>Last synced 2m ago</span>
+                            <span>Last synced: ${timeAgo}</span>
                         </div>
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <button class="btn btn-ghost btn-sm" style="color:var(--red-500);">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--red-500);" onclick="AccountsPage.deleteAccount('${acc.emu_index}')">
                         <svg style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                         Delete
                     </button>
-                    <button class="btn btn-outline btn-sm">
+                    <button class="btn btn-outline btn-sm" onclick="AccountsPage.openEditForm('${acc.account_id}')">
                         <svg style="width:13px;height:13px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         Edit
                     </button>
@@ -597,40 +804,40 @@ const AccountsPage = {
             <div class="panel-stats-strip">
                 <div class="panel-stat-item">
                     <span class="panel-stat-label">⚡ Power</span>
-                    <span class="panel-stat-value">${acc.pow}M</span>
+                    <span class="panel-stat-value">${powFormatted}</span>
                     <span class="panel-stat-sub" style="color:var(--primary)">Top metric</span>
                 </div>
                 <div class="panel-stat-item">
                     <span class="panel-stat-label">🏛 Hall Level</span>
-                    <span class="panel-stat-value">${acc.hallLvl}</span>
-                    <span class="panel-stat-sub">${Math.round(acc.hallLvl/30*100)}% to max</span>
+                    <span class="panel-stat-value">${acc.hall_level || 0}</span>
+                    <span class="panel-stat-sub">${Math.round((acc.hall_level || 0) / 25 * 100)}% to max</span>
                 </div>
                 <div class="panel-stat-item">
                     <span class="panel-stat-label">🏪 Market Level</span>
-                    <span class="panel-stat-value">${acc.marketLvl}</span>
-                    <span class="panel-stat-sub">${Math.round(acc.marketLvl/30*100)}% to max</span>
+                    <span class="panel-stat-value">${acc.market_level || 0}</span>
+                    <span class="panel-stat-sub">${Math.round((acc.market_level || 0) / 25 * 100)}% to max</span>
                 </div>
                 <div class="panel-stat-item">
                     <span class="panel-stat-label">🔗 Match Status</span>
                     <span class="panel-stat-value" style="font-size:14px;padding-top:2px;">
-                        ${acc.accMatching === 'Yes'
-                            ? '<span class="badge-status-yes" style="font-size:13px;padding:4px 10px;">✓ Matched</span>'
-                            : '<span class="badge-status-no" style="font-size:13px;padding:4px 10px;">✗ Unsynced</span>'}
+                        ${accMatching === 'Yes'
+                ? '<span class="badge-status-yes" style="font-size:13px;padding:4px 10px;">✓ Matched</span>'
+                : '<span class="badge-status-no" style="font-size:13px;padding:4px 10px;">✗ Unsynced</span>'}
                     </span>
-                    <span class="panel-stat-sub">${acc.accountsTotal} account(s) linked</span>
+                    <span class="panel-stat-sub">${accountsTotal} account(s) linked</span>
                 </div>
                 <div class="panel-stat-item">
                     <span class="panel-stat-label">🌐 Provider</span>
-                    <span class="panel-stat-value" style="font-size:15px;padding-top:4px;">${acc.provider}</span>
-                    <span class="panel-stat-sub">${acc.alliance !== 'None' ? acc.alliance : 'No alliance'}</span>
+                    <span class="panel-stat-value" style="font-size:15px;padding-top:4px;">${acc.provider || 'Global'}</span>
+                    <span class="panel-stat-sub">${displayAlliance}</span>
                 </div>
             </div>
 
             <!-- Tabs -->
             <div class="panel-tabs">
-                <div class="panel-tab ${this._activeDetailTab === 'overview'  ? 'active' : ''}" onclick="AccountsPage.switchTab('overview')">Overview</div>
+                <div class="panel-tab ${this._activeDetailTab === 'overview' ? 'active' : ''}" onclick="AccountsPage.switchTab('overview')">Overview</div>
                 <div class="panel-tab ${this._activeDetailTab === 'resources' ? 'active' : ''}" onclick="AccountsPage.switchTab('resources')">Resources</div>
-                <div class="panel-tab ${this._activeDetailTab === 'activity'  ? 'active' : ''}" onclick="AccountsPage.switchTab('activity')">Activity Log</div>
+                <div class="panel-tab ${this._activeDetailTab === 'activity' ? 'active' : ''}" onclick="AccountsPage.switchTab('activity')">Activity Log</div>
             </div>
 
             <!-- Tab Content -->
@@ -644,7 +851,7 @@ const AccountsPage = {
 
     switchTab(tabId) {
         this._activeDetailTab = tabId;
-        const acc = this._mockData.find(a => a.id === this._selectedAccountId);
+        const acc = this._accountsData.find(a => a.account_id === this._selectedAccountId);
         const container = document.getElementById('panel-tab-content');
         if (container && acc) {
             container.innerHTML = `<div class="panel-tab-body">${this._renderActiveTab(acc)}</div>`;
@@ -655,11 +862,22 @@ const AccountsPage = {
     },
 
     _renderActiveTab(acc) {
+        const loginMethod = acc.login_method || '—';
+        const displayEmail = acc.email || '—';
+        const displayAlliance = acc.alliance || '—';
+        const hallLvl = acc.hall_level || 0;
+        const marketLvl = acc.market_level || 0;
+        const accMatching = acc.lord_name ? 'Yes' : 'No';
+        const accountsTotal = acc.provider ? 1 : 0;
+
         /* ───── OVERVIEW ───── */
         if (this._activeDetailTab === 'overview') {
-            const loginDotClass = acc.loginMethod === 'Google' ? 'method-dot-google' : acc.loginMethod === 'Facebook' ? 'method-dot-facebook' : 'method-dot-apple';
-            const hallPct  = Math.round(acc.hallLvl / 30 * 100);
-            const mktPct   = Math.round(acc.marketLvl / 30 * 100);
+            const loginDotClass = loginMethod === 'Google' ? 'method-dot-google' : loginMethod === 'Facebook' ? 'method-dot-facebook' : 'method-dot-apple';
+            const hallPct = Math.round(hallLvl / 25 * 100);
+            const mktPct = Math.round(marketLvl / 25 * 100);
+            const emuDisplay = acc.emu_name || 'LDP-' + acc.emu_index;
+            const isOnline = (acc.emu_status || '').toLowerCase() === 'online';
+
             return `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;">
                     <!-- Left -->
@@ -669,11 +887,11 @@ const AccountsPage = {
                             <div class="info-card">
                                 <div class="ov-row">
                                     <span class="ov-label">Method</span>
-                                    <span class="ov-value"><span class="${loginDotClass}"></span> ${acc.loginMethod}</span>
+                                    <span class="ov-value"><span class="${loginDotClass}"></span> ${loginMethod}</span>
                                 </div>
                                 <div class="ov-row">
                                     <span class="ov-label">Email</span>
-                                    <span class="ov-value" style="font-family:monospace;font-size:12px;font-weight:500;">${acc.email}</span>
+                                    <span class="ov-value" style="font-family:monospace;font-size:12px;font-weight:500;">${displayEmail}</span>
                                 </div>
                             </div>
                         </div>
@@ -683,13 +901,13 @@ const AccountsPage = {
                                 <div class="ov-row">
                                     <span class="ov-label">Instance</span>
                                     <span class="ov-value">
-                                        LDP-${acc.emulator.replace('#','')}
-                                        <span style="width:7px;height:7px;border-radius:50%;background:${acc.status==='online'?'var(--emerald-500)':'var(--border)'};${acc.status==='online'?'box-shadow:0 0 5px var(--emerald-500);':''}display:inline-block;"></span>
+                                        ${emuDisplay}
+                                        <span style="width:7px;height:7px;border-radius:50%;background:${isOnline ? 'var(--emerald-500)' : 'var(--border)'};${isOnline ? 'box-shadow:0 0 5px var(--emerald-500);' : ''}display:inline-block;"></span>
                                     </span>
                                 </div>
                                 <div class="ov-row">
                                     <span class="ov-label">Provider</span>
-                                    <span class="ov-value">${acc.provider}</span>
+                                    <span class="ov-value">${acc.provider || 'Global'}</span>
                                 </div>
                             </div>
                         </div>
@@ -702,22 +920,22 @@ const AccountsPage = {
                             <div class="info-card">
                                 <div class="ov-row">
                                     <span class="ov-label">Alliance</span>
-                                    <span class="ov-value">${acc.alliance}</span>
+                                    <span class="ov-value">${displayAlliance}</span>
                                 </div>
                                 <div class="ov-row">
                                     <span class="ov-label">Hall Level</span>
                                     <span class="ov-value">
-                                        ${acc.hallLvl}
+                                        ${hallLvl}
                                         <span class="level-mini-bar"><span class="level-mini-fill" style="width:${hallPct}%;display:block;height:100%;"></span></span>
-                                        <span style="font-size:11px;color:var(--muted-foreground);font-weight:400;">/ 30</span>
+                                        <span style="font-size:11px;color:var(--muted-foreground);font-weight:400;">/ 25</span>
                                     </span>
                                 </div>
                                 <div class="ov-row">
                                     <span class="ov-label">Market Level</span>
                                     <span class="ov-value">
-                                        ${acc.marketLvl}
+                                        ${marketLvl}
                                         <span class="level-mini-bar"><span class="level-mini-fill" style="width:${mktPct}%;display:block;height:100%;"></span></span>
-                                        <span style="font-size:11px;color:var(--muted-foreground);font-weight:400;">/ 30</span>
+                                        <span style="font-size:11px;color:var(--muted-foreground);font-weight:400;">/ 25</span>
                                     </span>
                                 </div>
                             </div>
@@ -730,15 +948,15 @@ const AccountsPage = {
                                         Status
                                         <svg style="width:11px;height:11px;color:var(--muted-foreground)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" title="Whether this account is matched to a player profile"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                     </span>
-                                    <span class="ov-value ${acc.accMatching==='Yes'?'matched':''}">
-                                        ${acc.accMatching==='Yes'
-                                            ? '<svg style="width:13px;height:13px;background:var(--emerald-500);color:white;border-radius:3px;padding:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Matched'
-                                            : '<span style="color:var(--red-500);">✗ Unsynced</span>'}
+                                    <span class="ov-value ${accMatching === 'Yes' ? 'matched' : ''}">
+                                        ${accMatching === 'Yes'
+                    ? '<svg style="width:13px;height:13px;background:var(--emerald-500);color:white;border-radius:3px;padding:1px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Matched'
+                    : '<span style="color:var(--red-500);">✗ Unsynced</span>'}
                                     </span>
                                 </div>
                                 <div class="ov-row">
                                     <span class="ov-label">Total Linked</span>
-                                    <span class="ov-value">${acc.accountsTotal} account(s)</span>
+                                    <span class="ov-value">${accountsTotal} account(s)</span>
                                 </div>
                             </div>
                         </div>
@@ -765,19 +983,21 @@ const AccountsPage = {
 
         /* ───── RESOURCES ───── */
         if (this._activeDetailTab === 'resources') {
-            const goldM = parseFloat(acc.gold);
-            const woodM = parseFloat(acc.wood);
-            const oreM  = parseFloat(acc.ore);
-            // Cap = 30M for simplicity; pct based on that
-            const goldPct = Math.min(Math.round(goldM / 2.4 * 100), 100); // assume cap 2.4M
-            const woodPct = Math.min(Math.round(woodM / 16 * 100), 100);
-            const orePct  = Math.min(Math.round(oreM  / 25 * 100), 100);
+            const goldFormatted = AccountsPage.formatResource(acc.gold || 0);
+            const woodFormatted = AccountsPage.formatResource(acc.wood || 0);
+            const oreFormatted = AccountsPage.formatResource(acc.ore || 0);
+            const petToken = acc.pet_token || 0;
+            // Cap = 3000M (3B) for simplicity; pct based on that
+            const goldPct = Math.min(Math.round((acc.gold || 0) / 3000000000 * 100), 100);
+            const woodPct = Math.min(Math.round((acc.wood || 0) / 3000000000 * 100), 100);
+            const orePct = Math.min(Math.round((acc.ore || 0) / 3000000000 * 100), 100);
             const oreIsCritical = orePct < 30;
+            const timeAgo = acc.last_scan_at ? new Date(acc.last_scan_at).toLocaleTimeString() : 'Never';
 
             return `
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                     <div class="ov-section-title" style="margin:0;">Resource Stockpile</div>
-                    <span style="font-size:11px;color:var(--muted-foreground);font-family:monospace;">Last updated: 2m ago</span>
+                    <span style="font-size:11px;color:var(--muted-foreground);font-family:monospace;">Last updated: ${timeAgo}</span>
                 </div>
 
                 <div class="res-grid">
@@ -787,11 +1007,11 @@ const AccountsPage = {
                             <span class="res-icon">🪙</span>
                             <span class="res-label gold">Gold</span>
                         </div>
-                        <div class="res-value">${goldM * 1000 >= 1000 ? goldM.toFixed(1) + 'M' : (goldM * 1000).toLocaleString()}</div>
+                        <div class="res-value">${goldFormatted}</div>
                         <div class="res-bar"><div class="res-fill gold" style="width:${goldPct}%"></div></div>
                         <div class="res-footer">
-                            <span class="res-cap">${goldPct}% cap</span>
-                            <span class="delta-up">▲ +12,000</span>
+                            <span class="res-cap">Cap max</span>
+                            <span class="delta-up">▲</span>
                         </div>
                     </div>
 
@@ -801,25 +1021,25 @@ const AccountsPage = {
                             <span class="res-icon">🪵</span>
                             <span class="res-label wood">Wood</span>
                         </div>
-                        <div class="res-value">${woodM >= 1 ? woodM.toFixed(1) + 'M' : (woodM * 1000).toLocaleString()}</div>
+                        <div class="res-value">${woodFormatted}</div>
                         <div class="res-bar"><div class="res-fill wood" style="width:${woodPct}%"></div></div>
                         <div class="res-footer">
-                            <span class="res-cap">${woodPct}% cap</span>
-                            <span class="delta-up">▲ +8,000</span>
+                            <span class="res-cap">Cap max</span>
+                            <span class="delta-up">▲</span>
                         </div>
                     </div>
 
                     <!-- Ore -->
                     <div class="res-card ${oreIsCritical ? 'critical' : ''}">
                         <div class="res-header">
-                            <svg class="res-icon" style="width:14px;color:${oreIsCritical?'var(--red-500)':'var(--indigo-400,#818cf8)'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                            <span class="res-label ore" style="${oreIsCritical?'color:var(--red-500);':''}">Ore${oreIsCritical?' ⚠':''}</span>
+                            <svg class="res-icon" style="width:14px;color:${oreIsCritical ? 'var(--red-500)' : 'var(--indigo-400,#818cf8)'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                            <span class="res-label ore" style="${oreIsCritical ? 'color:var(--red-500);' : ''}">Ore${oreIsCritical ? ' ⚠' : ''}</span>
                         </div>
-                        <div class="res-value ${oreIsCritical ? 'critical' : ''}">${oreM >= 1 ? oreM.toFixed(1) + 'M' : (oreM * 1000).toLocaleString()}</div>
+                        <div class="res-value ${oreIsCritical ? 'critical' : ''}">${oreFormatted}</div>
                         <div class="res-bar"><div class="res-fill ${oreIsCritical ? 'critical-fill' : 'ore'}" style="width:${orePct}%"></div></div>
                         <div class="res-footer">
-                            <span class="res-cap ${oreIsCritical ? 'warn' : ''}">${orePct}%${oreIsCritical ? ' — Critical' : ' cap'}</span>
-                            <span class="delta-down">▼ 3,000</span>
+                            <span class="res-cap ${oreIsCritical ? 'warn' : ''}">Cap max</span>
+                            <span class="${orePct > 20 ? 'delta-down' : 'delta-up'}">${orePct > 20 ? '▼' : '▲'}</span>
                         </div>
                     </div>
                 </div>
@@ -852,8 +1072,8 @@ const AccountsPage = {
                         </div>
                         <div class="ai-body">
                             ${oreIsCritical
-                                ? `<strong>Ore is critically low (${orePct}%)</strong> and declining — prioritize farming runs before your next Hall upgrade. `
-                                : 'Resources look healthy. '}
+                    ? `<strong>Ore is critically low (${orePct}%)</strong> and declining — prioritize farming runs before your next Hall upgrade. `
+                    : 'Resources look healthy. '}
                             Gold cap will be reached in <strong>~2 days</strong> at current production rates.
                         </div>
                     </div>
@@ -863,14 +1083,16 @@ const AccountsPage = {
 
         /* ───── ACTIVITY LOG ───── */
         if (this._activeDetailTab === 'activity') {
+            const pVal = acc.note || '';
+            const tID = acc.account_id;
             return `
                 <!-- Operator Notes -->
                 <div style="margin-bottom:28px;">
                     <div class="act-section-title">Operator Notes</div>
-                    <textarea class="act-textarea" id="act-note-${acc.id}" oninput="AccountsPage._handleNoteInput(${acc.id})">${acc.note}</textarea>
+                    <textarea class="act-textarea" id="act-note-${tID}" oninput="AccountsPage._handleNoteInput(${tID})">${pVal}</textarea>
                     <div class="act-save-row">
-                        <span class="act-save-feedback" id="act-save-fb-${acc.id}">✓ Saved</span>
-                        <button class="act-save-btn" id="act-save-btn-${acc.id}" onclick="AccountsPage._saveNote(${acc.id})">Save Note</button>
+                        <span class="act-save-feedback" id="act-save-fb-${tID}">✓ Saved</span>
+                        <button class="act-save-btn" id="act-save-btn-${tID}" onclick="AccountsPage._saveNote(${tID})">Save Note</button>
                     </div>
                 </div>
 
@@ -881,7 +1103,7 @@ const AccountsPage = {
                         <div class="tl-item">
                             <div class="tl-dot primary"></div>
                             <div class="tl-time">Today, 10:23 AM</div>
-                            <div class="tl-text"><strong>Synced successfully</strong> via LDP-${acc.emulator.replace('#','')}</div>
+                            <div class="tl-text"><strong>Synced successfully</strong> via LDP-${acc.emu_index}</div>
                         </div>
                         <div class="tl-item">
                             <div class="tl-dot success"></div>
@@ -891,12 +1113,7 @@ const AccountsPage = {
                         <div class="tl-item">
                             <div class="tl-dot info"></div>
                             <div class="tl-time">2 days ago</div>
-                            <div class="tl-text"><strong>Account matched</strong> to player profile</div>
-                        </div>
-                        <div class="tl-item">
-                            <div class="tl-dot"></div>
-                            <div class="tl-time">3 days ago</div>
-                            <div class="tl-text">Login method changed to ${acc.loginMethod}</div>
+                            <div class="tl-text"><strong>Account matched</strong> for ${acc.lord_name || '—'}</div>
                         </div>
                     </div>
                 </div>
@@ -908,31 +1125,84 @@ const AccountsPage = {
     _noteOriginals: {},
 
     _handleNoteInput(id) {
-        const ta  = document.getElementById(`act-note-${id}`);
+        const ta = document.getElementById(`act-note-${id}`);
         const btn = document.getElementById(`act-save-btn-${id}`);
         if (!ta || !btn) return;
         if (!(id in this._noteOriginals)) {
-            const acc = this._mockData.find(a => a.id === id);
-            this._noteOriginals[id] = acc ? acc.note : '';
+            const acc = this._accountsData.find(a => a.account_id === id);
+            this._noteOriginals[id] = acc ? (acc.note || '') : '';
         }
         const changed = ta.value !== this._noteOriginals[id];
         btn.classList.toggle('enabled', changed);
     },
 
-    _saveNote(id) {
-        const ta  = document.getElementById(`act-note-${id}`);
+    async _saveNote(id) {
+        const ta = document.getElementById(`act-note-${id}`);
         const btn = document.getElementById(`act-save-btn-${id}`);
-        const fb  = document.getElementById(`act-save-fb-${id}`);
+        const fb = document.getElementById(`act-save-fb-${id}`);
         if (!ta || !btn || !fb) return;
-        const acc = this._mockData.find(a => a.id === id);
-        if (acc) acc.note = ta.value;
-        this._noteOriginals[id] = ta.value;
+
+        const acc = this._accountsData.find(a => a.account_id === id);
+        if (!acc) return;
+
         btn.classList.remove('enabled');
+        fb.textContent = 'Saving...';
+        fb.style.color = 'var(--muted-foreground)';
         fb.classList.add('show');
-        setTimeout(() => fb.classList.remove('show'), 2200);
+
+        try {
+            const res = await fetch(`/api/accounts/${acc.emu_index}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note: ta.value })
+            });
+            const data = await res.json();
+
+            if (data.status === 'ok') {
+                acc.note = ta.value;
+                this._noteOriginals[id] = ta.value;
+                fb.textContent = 'Saved via API!';
+                fb.style.color = 'var(--emerald-500)';
+                setTimeout(() => fb.classList.remove('show'), 2200);
+            } else {
+                throw new Error(data.error || 'Failed to save');
+            }
+        } catch (e) {
+            fb.textContent = e.message;
+            fb.style.color = 'var(--red-500)';
+            setTimeout(() => fb.classList.remove('show'), 3000);
+            btn.classList.add('enabled');
+        }
     },
 
-    init() { this._noteOriginals = {}; },
+    async fetchData() {
+        this._isLoading = true;
+
+        if (typeof router !== 'undefined' && router._currentPage === 'accounts') {
+            const root = document.getElementById('page-root');
+            if (root) root.innerHTML = this.render();
+        }
+
+        try {
+            const res = await fetch('/api/accounts');
+            this._accountsData = await res.json();
+        } catch (e) {
+            console.error('Failed to fetch accounts:', e);
+            this._accountsData = [];
+            Toast.show('Failed to load accounts', 'error');
+        } finally {
+            this._isLoading = false;
+            if (typeof router !== 'undefined' && router._currentPage === 'accounts') {
+                const root = document.getElementById('page-root');
+                if (root) root.innerHTML = this.render();
+            }
+        }
+    },
+
+    init() {
+        this._noteOriginals = {};
+        this.fetchData();
+    },
     destroy() {
         this._selectedAccountId = null;
         this._noteOriginals = {};

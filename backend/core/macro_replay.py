@@ -15,9 +15,11 @@ Coordinate System:
 """
 import json
 import time
+import asyncio
 import threading
 import subprocess
 import os
+from datetime import datetime
 from backend.config import config
 
 
@@ -114,8 +116,20 @@ def _convert_coord(record_x, record_y,
     return int(round(px_x)), int(round(px_y))
 
 
+def _run_db_async(coro):
+    """Run an async DB coroutine from a background thread."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=10)
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
 def _replay_worker(serial: str, filepath: str, filename: str,
-                    ws_callback=None):
+                    emu_index: int = -1, ws_callback=None):
     """Background thread that replays a macro on one emulator.
 
     Processes operations sequentially with proper timing:
@@ -125,6 +139,7 @@ def _replay_worker(serial: str, filepath: str, filename: str,
        - Compare with DOWN position: if movement > threshold → swipe, else → tap
     """
     key = f"{serial}:{filename}"
+    db_run_id = None  # DB macro_runs.id
 
     try:
         record = parse_record(filepath)
@@ -146,6 +161,28 @@ def _replay_worker(serial: str, filepath: str, filename: str,
                 if len(pts) == 1 and pts[0].get("state") == 1:
                     touch_count += 1
 
+        # ── Persist to DB ──
+        try:
+            from backend.storage.database import database
+            resolution = f"{rec_w}x{rec_h}"
+            macro_id = _run_db_async(
+                database.upsert_macro(
+                    filename=filename, resolution=resolution,
+                    duration_ms=duration_ms, file_path=filepath,
+                )
+            )
+            emu_id = _run_db_async(
+                database.upsert_emulator(emu_index, serial)
+            )
+            db_run_id = _run_db_async(
+                database.save_macro_run(
+                    macro_id=macro_id, emulator_id=emu_id,
+                    status="running", ops_total=touch_count,
+                )
+            )
+        except Exception as db_err:
+            print(f"[MacroReplay] DB save warning: {db_err}")
+
         with _lock:
             _running_macros[key] = {
                 "status": "running",
@@ -157,6 +194,7 @@ def _replay_worker(serial: str, filepath: str, filename: str,
                 "current_loop": 1,
                 "total_loops": loop_times,
                 "duration_ms": duration_ms,
+                "db_run_id": db_run_id,
             }
 
         if ws_callback:
@@ -258,6 +296,20 @@ def _replay_worker(serial: str, filepath: str, filename: str,
                 _running_macros[key]["status"] = "completed"
                 _running_macros[key]["elapsed_ms"] = int(elapsed * 1000)
 
+        # ── Update DB ──
+        if db_run_id:
+            try:
+                from backend.storage.database import database
+                _run_db_async(
+                    database.update_macro_run(
+                        run_id=db_run_id, status="completed",
+                        ops_completed=touch_count,
+                        finished_at=datetime.now().isoformat(),
+                    )
+                )
+            except Exception as db_err:
+                print(f"[MacroReplay] DB update warning: {db_err}")
+
         if ws_callback:
             ws_callback("macro_completed", {
                 "serial": serial,
@@ -272,6 +324,20 @@ def _replay_worker(serial: str, filepath: str, filename: str,
             if key in _running_macros:
                 _running_macros[key]["status"] = "error"
                 _running_macros[key]["error"] = str(e)
+
+        # ── Update DB on failure ──
+        if db_run_id:
+            try:
+                from backend.storage.database import database
+                _run_db_async(
+                    database.update_macro_run(
+                        run_id=db_run_id, status="failed",
+                        error=str(e),
+                        finished_at=datetime.now().isoformat(),
+                    )
+                )
+            except Exception:
+                pass
 
         if ws_callback:
             ws_callback("macro_failed", {
@@ -304,7 +370,7 @@ def start_replay(index: int, filepath: str, filename: str,
 
     thread = threading.Thread(
         target=_replay_worker,
-        args=(serial, filepath, filename, ws_callback),
+        args=(serial, filepath, filename, index, ws_callback),
         daemon=True,
     )
     thread.start()

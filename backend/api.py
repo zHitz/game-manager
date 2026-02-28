@@ -143,18 +143,7 @@ async def run_task(serial: str, task_type: str):
             return {"status": "error", "msg": result.get("error")}
 
     task_id = task_queue.submit_task(serial, tt)
-
-    # Also save to DB
-    try:
-        await database.save_task_log(
-            task_id=task_id,
-            serial=serial,
-            task_type=task_type,
-            status="QUEUED",
-        )
-    except Exception:
-        pass
-
+    # task_queue now handles DB persistence internally
     return {"status": "accepted", "task_id": task_id}
 
 
@@ -188,8 +177,12 @@ async def get_queue():
 
 @app.get("/api/tasks/history")
 async def get_history(limit: int = 50):
-    """Get task execution history."""
-    return task_queue.get_history(limit)
+    """Get task execution history (in-memory + DB fallback)."""
+    mem_history = task_queue.get_history(limit)
+    if mem_history:
+        return mem_history
+    # Fallback to DB history
+    return await database.get_task_runs(limit=limit)
 
 
 # ──────────────────────────────────────────────
@@ -361,6 +354,22 @@ async def stop_scan(index: int):
 
 
 # ──────────────────────────────────────────────
+# DB-backed History Endpoints
+# ──────────────────────────────────────────────
+
+@app.get("/api/macro-runs/history")
+async def get_macro_runs_history(emulator_index: int = None, limit: int = 50):
+    """Get macro execution history from database."""
+    return await database.get_macro_runs(emulator_index=emulator_index, limit=limit)
+
+
+@app.get("/api/task-runs/history")
+async def get_task_runs_history(emulator_index: int = None, limit: int = 50):
+    """Get task execution history from database."""
+    return await database.get_task_runs(emulator_index=emulator_index, limit=limit)
+
+
+# ──────────────────────────────────────────────
 # Emulator Data (Scan Results)
 # ──────────────────────────────────────────────
 
@@ -383,6 +392,77 @@ async def get_emulator_data(index: int):
 async def get_emulator_history(index: int, limit: int = 20):
     """Get scan history for a specific emulator."""
     return await database.get_emulator_scan_history(index, limit)
+
+# ──────────────────────────────────────────────
+# Account Endpoints
+# ──────────────────────────────────────────────
+
+@app.get("/api/accounts")
+async def get_accounts():
+    """Get all accounts with emulator + latest scan data."""
+    return await database.get_all_accounts()
+
+
+@app.post("/api/accounts")
+async def create_account(body: dict):
+    """Create a new account manually."""
+    if not body:
+        return {"error": "Empty body"}
+    
+    emu_index = body.get("emu_index")
+    if emu_index is None:
+        return {"error": "emu_index is required"}
+    
+    try:
+        emu_index = int(emu_index)
+    except ValueError:
+        return {"error": "emu_index must be an integer"}
+
+    try:
+        acc_id = await database.upsert_account_full(
+            emulator_index=emu_index,
+            lord_name=body.get("lord_name", ""),
+            power=float(body.get("power", 0)),
+            login_method=body.get("login_method", ""),
+            email=body.get("email", ""),
+            provider=body.get("provider", "Global"),
+            alliance=body.get("alliance", ""),
+            note=body.get("note", "")
+        )
+        return {"status": "ok", "account_id": acc_id, "emu_index": emu_index}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/accounts/{emu_index}")
+async def get_account(emu_index: int):
+    """Get single account by emulator index."""
+    acc = await database.get_account_by_emu_index(emu_index)
+    if acc:
+        return acc
+    return {"error": "Account not found", "emu_index": emu_index}
+
+
+@app.put("/api/accounts/{emu_index}")
+async def update_account(emu_index: int, body: dict):
+    """Update account fields (note, login_method, email, provider, alliance)."""
+    if not body:
+        return {"error": "Empty body", "emu_index": emu_index}
+    body.pop("emu_index", None)
+    ok = await database.update_account(emu_index, **body)
+    if ok:
+        return {"status": "ok", "emu_index": emu_index}
+    return {"error": "Account not found or no valid fields", "emu_index": emu_index}
+
+
+@app.delete("/api/accounts/{emu_index}")
+async def delete_account(emu_index: int):
+    """Delete an account record."""
+    ok = await database.delete_account(emu_index)
+    if ok:
+        return {"status": "deleted", "emu_index": emu_index}
+    return {"error": "Account not found", "emu_index": emu_index}
+
 
 # ──────────────────────────────────────────────
 # Startup
