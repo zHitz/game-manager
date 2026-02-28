@@ -6,6 +6,7 @@ const router = {
     _currentPage: null,
     _pages: {
         dashboard: DashboardPage,
+        task: TaskPage,
         runner: TaskRunnerPage,
         history: HistoryPage,
         emulators: EmulatorsPage,
@@ -15,6 +16,7 @@ const router = {
 
     _labels: {
         dashboard: 'Dashboard',
+        task: 'Task Checklist',
         runner: 'Actions',
         history: 'History',
         emulators: 'Emulators',
